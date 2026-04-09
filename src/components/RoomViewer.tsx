@@ -51,7 +51,25 @@ export default function RoomViewer() {
   }, [updatePeer]);
 
   const [roomPin, setRoomPin] = useState<string>('');
-  const [manualPinInput, setManualPinInput] = useState<string>('');
+  const [manualPinInput, setManualPinInput] = useState<string[]>(Array(5).fill(''));
+  const pinInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handlePinChange = useCallback((index: number, val: string) => {
+    const digit = val.replace(/\D/g, '').slice(-1);
+    const newPin = [...manualPinInput];
+    newPin[index] = digit;
+    setManualPinInput(newPin);
+
+    if (digit && index < 4) {
+      pinInputRefs.current[index + 1]?.focus();
+    }
+  }, [manualPinInput]);
+
+  const handlePinKeyDown = useCallback((index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !manualPinInput[index] && index > 0) {
+      pinInputRefs.current[index - 1]?.focus();
+    }
+  }, [manualPinInput]);
 
   const startConnection = useCallback(async (overridePin?: string) => {
     setConnectionState('waking');
@@ -215,106 +233,102 @@ export default function RoomViewer() {
 
     <div className="w-full max-w-6xl mx-auto py-1 px-6">
       
-      {peerList.length > 1 && (
-        <div className="flex justify-end mb-4">
-          <input type="file" multiple ref={globalFileInputRef} onChange={handleGlobalSend} className="hidden" />
-          <button 
-            onClick={() => globalFileInputRef.current?.click()}
-            className={`flex items-center gap-2 bg-transparent border ${themeBorder} ${themeText} font-semibold px-4 py-2 rounded-xl transition-all duration-300 ${themeHover}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-            Send to All Devices
-          </button>
-        </div>
-      )}
-
-      {peerList.length === 0 ? (
-        <div className="flex flex-col lg:flex-row items-center justify-center mt-12 gap-10 max-w-5xl mx-auto px-4">
-          
-          {/* Autodiscovery Side */}
-          <div className="flex flex-col items-center justify-center p-10 bg-white/[0.02] border border-white/5 rounded-3xl flex-1 w-full relative overflow-hidden transition-all hover:bg-white/[0.03]">
-             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-neon-blue to-transparent opacity-30" />
-             <div className="w-20 h-20 rounded-full border-2 border-dashed border-white/20 animate-[spin_4s_linear_infinite] flex items-center justify-center mb-8 relative">
-              <div className="w-3 h-3 bg-neon-blue rounded-full absolute top-1 blur-[1px]" />
+      <div className="flex flex-col lg:flex-row items-stretch justify-start mt-4 gap-8 max-w-[1400px] mx-auto px-4 w-full h-full min-h-[600px]">
+        
+        {/* Left Side: Dynamic Workspace */}
+        <div className="flex flex-col flex-1 w-full min-w-0">
+          {peerList.length > 1 && (
+            <div className="flex justify-start mb-6">
+              <input type="file" multiple ref={globalFileInputRef} onChange={handleGlobalSend} className="hidden" />
+              <button 
+                onClick={() => globalFileInputRef.current?.click()}
+                className={`flex items-center gap-2 bg-transparent border ${themeBorder} ${themeText} font-semibold px-5 py-2.5 rounded-xl transition-all duration-300 ${themeHover} shadow-lg`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+                Send to All Devices
+              </button>
             </div>
-            <h2 className="text-2xl font-semibold text-white mb-3">Scanning Network...</h2>
-            <p className="text-white/40 max-w-sm text-center leading-relaxed">
-              Open FLUX on another device connected to the exact same Wi-Fi network.
-            </p>
-          </div>
-
-          <div className="hidden lg:block w-px h-64 bg-gradient-to-b from-transparent via-white/10 to-transparent" />
-          <div className="lg:hidden h-px w-full max-w-xs bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-          {/* Manual Pin Side */}
-          <div className="flex flex-col items-center justify-center p-10 bg-white/[0.02] border border-white/5 rounded-3xl flex-1 w-full relative transition-all hover:bg-white/[0.03]">
-             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-             <h3 className="text-white/60 font-medium mb-8">Bypass network isolation</h3>
-             
-             {roomPin ? (
-               <div className="flex flex-col sm:flex-row gap-8 items-center w-full justify-center">
-                 <div className="p-3 bg-white rounded-xl shadow-[0_0_30px_rgba(255,255,255,0.1)]">
-                   {typeof window !== 'undefined' && (
-                     <QRCodeSVG value={`${window.location.origin}/?room=${roomPin}`} size={110} />
-                   )}
-                 </div>
-                 <div className="flex flex-col items-center sm:items-start">
-                   <p className="text-white/40 text-xs uppercase tracking-widest mb-2 font-semibold">Join Code</p>
-                   <div className="text-4xl font-mono text-white tracking-widest px-5 py-3 bg-white/5 border border-white/10 rounded-xl shadow-inner">
-                     {roomPin}
-                   </div>
-                 </div>
-               </div>
-             ) : (
-                <div className="h-[134px] flex items-center justify-center"><div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin"/></div>
-             )}
-
-             <div className="mt-10 w-full max-w-sm relative flex gap-3">
-                <input 
-                  type="text" 
-                  maxLength={5}
-                  placeholder="Enter 5-digit PIN" 
-                  value={manualPinInput}
-                  onChange={(e) => setManualPinInput(e.target.value.replace(/\D/g, ''))}
-                  onKeyDown={(e) => { if(e.key === 'Enter' && manualPinInput.length === 5) startConnection(manualPinInput); }}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white placeholder-white/30 focus:outline-none focus:border-neon-blue/50 focus:ring-1 focus:ring-neon-blue/50 font-mono tracking-widest transition-all text-center text-lg"
-                />
-                <button 
-                  onClick={() => { if(manualPinInput.length === 5) startConnection(manualPinInput); }}
-                  disabled={manualPinInput.length !== 5}
-                  className="bg-white/10 text-white font-bold px-6 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-neon-blue hover:text-black transition-all duration-300"
-                >
-                  Join
-                </button>
-           </div>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
-          {peerList.map(peer => (
-            <DeviceCard 
-              key={peer.id} 
-              peer={peer} 
-              onStatusChange={(status) => updatePeer(peer.id, { activeStatus: status })}
-            />
-          ))}
+          )}
           
-          {/* Persistent Invite Ghost Card */}
-          {roomPin && (
-            <div className="flex flex-col items-center justify-center p-6 bg-white/[0.01] border-2 border-white/5 border-dashed rounded-3xl transition-all hover:bg-white/[0.03] min-h-[220px]">
-              {typeof window !== 'undefined' && (
-                <div className="p-2 bg-white rounded-xl mb-4 shadow-[0_0_15px_rgba(255,255,255,0.05)] opacity-80 hover:opacity-100 transition-opacity">
-                  <QRCodeSVG value={`${window.location.origin}/?room=${roomPin}`} size={70} />
-                </div>
-              )}
-              <p className="text-white/30 text-xs uppercase tracking-widest font-semibold mb-2 text-center">Add Device</p>
-              <div className="text-xl font-mono text-white/80 tracking-widest bg-black/20 px-4 py-2 rounded-xl border border-white/5">
-                {roomPin}
+          {peerList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-10 bg-white/[0.02] border border-white/5 rounded-3xl relative overflow-hidden transition-all hover:bg-white/[0.03] flex-1 min-h-[500px]">
+               <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-neon-blue to-transparent opacity-30" />
+               <div className="w-24 h-24 rounded-full border-2 border-dashed border-white/20 animate-[spin_4s_linear_infinite] flex items-center justify-center mb-8 relative">
+                <div className="w-3 h-3 bg-neon-blue rounded-full absolute top-1 blur-[1px]" />
               </div>
+              <h2 className="text-3xl font-semibold text-white mb-4">Scanning Network...</h2>
+              <p className="text-white/40 max-w-sm text-center leading-relaxed text-lg">
+                Open FLUX on another device connected to the exact same Wi-Fi network.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-max">
+              {peerList.map(peer => (
+                <DeviceCard 
+                  key={peer.id} 
+                  peer={peer} 
+                  onStatusChange={(status) => updatePeer(peer.id, { activeStatus: status })}
+                />
+              ))}
             </div>
           )}
         </div>
-      )}
+
+        {/* Divider */}
+        <div className="hidden lg:block w-px border-l border-dashed border-white/10" />
+        <div className="lg:hidden h-px w-full border-t border-dashed border-white/10 my-2" />
+
+        {/* Right Side: Persistent Manual Pin Side */}
+        <div className="flex flex-col items-center justify-center p-10 bg-white/[0.02] border border-white/5 rounded-3xl w-full lg:w-[420px] flex-shrink-0 relative transition-all hover:bg-white/[0.03] min-h-[500px]">
+           <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+           <h3 className="text-white/60 font-medium mb-8 uppercase tracking-widest text-sm">Room Invite</h3>
+           
+           {roomPin ? (
+             <div className="flex flex-col gap-6 items-center w-full justify-center">
+               <div className="p-4 bg-white rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+                 {typeof window !== 'undefined' && (
+                   <QRCodeSVG value={`${window.location.origin}/?room=${roomPin}`} size={140} />
+                 )}
+               </div>
+               <div className="flex flex-col items-center">
+                 <p className="text-white/40 text-xs uppercase tracking-widest mb-3 font-semibold">Join Code</p>
+                 <div className="text-5xl font-mono text-white tracking-widest px-6 py-3 bg-white/5 border border-white/10 rounded-2xl shadow-inner">
+                   {roomPin}
+                 </div>
+               </div>
+             </div>
+           ) : (
+              <div className="h-[290px] flex items-center justify-center"><div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin"/></div>
+           )}
+
+           <div className="w-3/4 h-px bg-white/5 my-10" />
+
+           <h3 className="text-white/40 text-xs uppercase tracking-widest mb-6 font-semibold text-center">Manually Enter Code</h3>
+           
+           <div className="w-full relative flex flex-col items-center gap-6">
+              <div className="flex gap-2 w-full justify-center">
+                {manualPinInput.map((p, i) => (
+                  <input
+                    key={i}
+                    ref={el => { pinInputRefs.current[i] = el; }}
+                    value={p}
+                    onChange={e => handlePinChange(i, e.target.value)}
+                    onKeyDown={e => handlePinKeyDown(i, e)}
+                    maxLength={1}
+                    className="w-12 h-14 bg-black/40 border border-white/10 rounded-xl text-center text-2xl font-mono text-white focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all shadow-inner"
+                  />
+                ))}
+              </div>
+              <button 
+                onClick={() => { const full = manualPinInput.join(''); if(full.length === 5) startConnection(full); }}
+                disabled={manualPinInput.join('').length !== 5}
+                className="w-full bg-white/10 text-white font-bold py-4 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-neon-blue hover:text-black transition-all duration-300 shadow-xl tracking-wide uppercase text-sm"
+              >
+                Join
+              </button>
+           </div>
+        </div>
+      </div>
     </div>
     </>
   );
