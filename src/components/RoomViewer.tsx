@@ -116,7 +116,14 @@ export default function RoomViewer() {
         });
       },
       setConnectionState,
-      (pin: string) => setRoomPin(pin),
+      (pin: string) => {
+        setRoomPin(pin);
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.set('room', pin);
+          window.history.replaceState({}, '', url.toString());
+        }
+      },
       targetRoom
     );
 
@@ -150,6 +157,31 @@ export default function RoomViewer() {
 
     bindSignaling();
   }, [createRTC, updatePeer]);
+
+  const handleExitRoom = useCallback(() => {
+    Object.values(rtcMapRef.current).forEach(r => r.close());
+    rtcMapRef.current = {};
+    setPeers({});
+    setRoomPin('');
+    setManualPinInput(Array(5).fill(''));
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.toString());
+    }
+    socketService.disconnect();
+    setTimeout(() => startConnection(), 100);
+  }, [startConnection]);
+
+  useEffect(() => {
+    if (!roomPin) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = ''; // Required for Chrome/Safari alert
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [roomPin]);
 
   useEffect(() => {
     startConnection();
@@ -303,30 +335,43 @@ export default function RoomViewer() {
 
            <div className="w-full h-px bg-white/5 my-8" />
 
-           <h3 className="text-white/40 text-[10px] uppercase tracking-widest mb-6 font-semibold text-center">Manually Enter Code</h3>
-           
-           <div className="w-full relative flex flex-col items-center gap-6">
-              <div className="flex gap-2 w-full justify-center">
-                {manualPinInput.map((p, i) => (
-                  <input
-                    key={i}
-                    ref={el => { pinInputRefs.current[i] = el; }}
-                    value={p}
-                    onChange={e => handlePinChange(i, e.target.value)}
-                    onKeyDown={e => handlePinKeyDown(i, e)}
-                    maxLength={1}
-                    className="w-10 h-12 bg-black/40 border border-white/10 rounded-xl text-center text-xl font-mono text-white focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all shadow-inner"
-                  />
-                ))}
+           {roomPin ? (
+              <div className="w-full relative flex flex-col items-center mt-2">
+                 <button 
+                  onClick={handleExitRoom}
+                  className="w-full bg-red-500/10 border border-red-500/20 text-red-400 font-bold py-3.5 rounded-xl hover:bg-red-500 hover:text-white transition-all duration-300 shadow-xl tracking-wide uppercase text-sm flex items-center justify-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  Exit Room
+                </button>
               </div>
-              <button 
-                onClick={() => { const full = manualPinInput.join(''); if(full.length === 5) startConnection(full); }}
-                disabled={manualPinInput.join('').length !== 5}
-                className="w-full bg-white/10 text-white font-bold py-3.5 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-neon-blue hover:text-black transition-all duration-300 shadow-xl tracking-wide uppercase text-sm"
-              >
-                Join
-              </button>
-           </div>
+           ) : (
+             <>
+               <h3 className="text-white/40 text-[10px] uppercase tracking-widest mb-6 font-semibold text-center">Manually Enter Code</h3>
+               <div className="w-full relative flex flex-col items-center gap-6">
+                  <div className="flex gap-2 w-full justify-center">
+                    {manualPinInput.map((p, i) => (
+                      <input
+                        key={i}
+                        ref={el => { pinInputRefs.current[i] = el; }}
+                        value={p}
+                        onChange={e => handlePinChange(i, e.target.value)}
+                        onKeyDown={e => handlePinKeyDown(i, e)}
+                        maxLength={1}
+                        className="w-10 h-12 bg-black/40 border border-white/10 rounded-xl text-center text-xl font-mono text-white focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all shadow-inner"
+                      />
+                    ))}
+                  </div>
+                  <button 
+                    onClick={() => { const full = manualPinInput.join(''); if(full.length === 5) startConnection(full); }}
+                    disabled={manualPinInput.join('').length !== 5}
+                    className="w-full bg-white/10 text-white font-bold py-3.5 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-neon-blue hover:text-black transition-all duration-300 shadow-xl tracking-wide uppercase text-sm"
+                  >
+                    Join
+                  </button>
+               </div>
+             </>
+           )}
         </div>
       </div>
     </div>
