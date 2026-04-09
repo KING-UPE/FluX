@@ -6,7 +6,13 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  });
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
