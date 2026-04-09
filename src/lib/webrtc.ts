@@ -134,13 +134,22 @@ export class WebRTCConnection {
 
   private flushMessageQueue() {
     while (this.messageQueue.length > 0 && this.dataChannel?.readyState === 'open') {
-      this.dataChannel.send(this.messageQueue.shift()! as ArrayBuffer);
+      try {
+        const msg = this.messageQueue.shift()!;
+        this.dataChannel.send(msg as any); 
+      } catch (e) {
+        console.error('Failed to send queued message:', e);
+      }
     }
   }
 
   public send(data: ChunkData) {
     if (this.dataChannel?.readyState === 'open') {
-      this.dataChannel.send(data as ArrayBuffer);
+      try {
+        this.dataChannel.send(data as any);
+      } catch (e) {
+        console.error('DataChannel send error:', e);
+      }
     } else {
       this.messageQueue.push(data);
     }

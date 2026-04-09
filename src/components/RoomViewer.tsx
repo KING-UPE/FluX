@@ -6,7 +6,7 @@ import DeviceCard from "./DeviceCard";
 import ConnectionLoader from "./ConnectionLoader";
 import { socketService, PeerInfo, ConnectionState } from "@/lib/socket";
 import { WebRTCConnection } from "@/lib/webrtc";
-import { FileSender } from "@/lib/fileTransfer";
+import { FileSender, TransferStats } from "@/lib/fileTransfer";
 
 interface PeerData {
   id: string;
@@ -15,6 +15,7 @@ interface PeerData {
   rtcState: 'connecting' | 'connected' | 'failed';
   rtc?: WebRTCConnection;
   activeStatus?: string;
+  stats?: TransferStats | null;
 }
 
 export default function RoomViewer() {
@@ -247,9 +248,15 @@ export default function RoomViewer() {
         if (peer.rtc && peer.rtc.isOpen) {
            const sender = new FileSender(
              fileArray, peer.rtc,
-             () => {}, 
-             () => console.log('Multicast done for ' + peer.name),
-             (err) => console.log('Multicast error for ' + peer.name, err)
+             (s) => updatePeer(peer.id, { activeStatus: 'sending', stats: s }), 
+             () => {
+                updatePeer(peer.id, { activeStatus: 'done', stats: null });
+                setTimeout(() => updatePeer(peer.id, { activeStatus: 'idle' }), 4000);
+             },
+             (err) => {
+                updatePeer(peer.id, { activeStatus: 'error' });
+                console.log('Multicast error for ' + peer.name, err);
+             }
            );
            sender.start();
         }

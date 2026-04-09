@@ -20,6 +20,7 @@ export class FileSender {
   private totalSize = 0;
   private totalSent = 0;
   private startTime = 0;
+  private lastStatsTime = 0;
   private currentFileName = '';
 
   constructor(
@@ -43,11 +44,17 @@ export class FileSender {
       return;
     }
 
-    const payload = this.files.map(f => ({
-      name: (f as any).webkitRelativePath || f.name,
-      size: f.size,
-      type: f.type
-    }));
+    const payload = this.files.length <= 20 
+      ? this.files.map(f => ({
+          name: (f as any).webkitRelativePath || f.name,
+          size: f.size,
+          type: f.type
+        }))
+      : [{ 
+          name: (this.files[0] as any).webkitRelativePath || this.files[0].name, 
+          size: this.files[0].size, 
+          type: this.files[0].type 
+        }]; // Just send the first one as a sample for large transfers
 
     this.rtc.send(JSON.stringify({
       type: 'transfer_req',
@@ -61,9 +68,13 @@ export class FileSender {
         const msg = JSON.parse(data);
         if (msg.type === 'ready') {
           this.startTime = Date.now();
+          this.updateStats(true); // Fire initial 0% progress immediately
           this.sendNextFile(0);
         }
         else if (msg.type === 'cancel') this.onError('Receiver declined the transfer.');
+        else if (msg.type === 'transfer_complete_ack') {
+          this.onComplete();
+        }
       }
     };
     this.rtc.onData(handler);
@@ -71,8 +82,10 @@ export class FileSender {
 
   private async sendNextFile(index: number) {
     if (index >= this.files.length) {
+      this.updateStats(true); // Final 100% update
       this.rtc.send(JSON.stringify({ type: 'all_done' }));
-      this.onComplete();
+      // We no longer call onComplete here. 
+      // We wait for 'transfer_complete_ack' in the start() handler.
       return;
     }
 
@@ -102,8 +115,14 @@ export class FileSender {
         while (localOffset < value.byteLength) {
           if (ch.bufferedAmount > MAX_BUFFERED) {
             await new Promise<void>(resolve => {
+              const timeout = setTimeout(() => {
+                ch.onbufferedamountlow = null;
+                resolve();
+              }, 150); // safety fallback
+
               ch.onbufferedamountlow = () => {
                 ch.onbufferedamountlow = null;
+                clearTimeout(timeout);
                 resolve();
               };
             });
@@ -126,11 +145,15 @@ export class FileSender {
     }
   }
 
-  private updateStats() {
-    const elapsed = (Date.now() - this.startTime) / 1000;
-    if (elapsed < 0.5) return; // Wait to stabilize
+  private updateStats(force = false) {
+    const now = Date.now();
+    const elapsed = (now - this.startTime) / 1000;
+    
+    // Throttle updates to every 200ms unless forced (start/end)
+    if (!force && now - this.lastStatsTime < 200) return;
+    this.lastStatsTime = now;
 
-    const bytesPerSec = this.totalSent / elapsed;
+    const bytesPerSec = elapsed > 0 ? this.totalSent / elapsed : 0;
     const mbps = (bytesPerSec / (1024 * 1024)).toFixed(1);
     
     const remainingBytes = this.totalSize - this.totalSent;
@@ -246,7 +269,11 @@ export class FileReceiver {
         }
       }
       else if (msg.type === 'all_done') {
-        this.onComplete();
+        // Wait for the disk queue to be completely empty before confirming
+        this.queue.then(() => {
+          this.rtc.send(JSON.stringify({ type: 'transfer_complete_ack' }));
+          this.onComplete();
+        });
       }
     } else {
       if (this.currentWriter) {

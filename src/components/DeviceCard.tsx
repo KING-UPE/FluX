@@ -10,6 +10,8 @@ interface PeerData {
   deviceType: string;
   rtcState: 'connecting' | 'connected' | 'failed';
   rtc?: WebRTCConnection;
+  activeStatus?: string;
+  stats?: TransferStats | null;
 }
 
 interface DeviceCardProps {
@@ -55,6 +57,12 @@ export default function DeviceCard({ peer, onStatusChange }: DeviceCardProps) {
     onStatusChange?.(status);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+  
+  // Sync with parent state for multicast/global triggers
+  useEffect(() => {
+    if (peer.activeStatus) setStatus(peer.activeStatus as any);
+    if (peer.stats !== undefined) setStats(peer.stats);
+  }, [peer.activeStatus, peer.stats]);
 
   // Setup receiver immediately when we have the RTC object
   useEffect(() => {
