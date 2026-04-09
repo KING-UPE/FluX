@@ -165,9 +165,6 @@ export default function RoomViewer() {
            await currentRTC.handleOffer(offer);
            return;
         }
-
-        }
-
         const rtc = createRTC(sender, false, 'Incoming Offer');
         setPeers(prev => ({
           ...prev,
@@ -200,7 +197,7 @@ export default function RoomViewer() {
       socket.off('webrtc_answer', onAnswer);
       socket.off('ice_candidate', onIce);
     };
-  }, [createRTC, updatePeer, logSystem, peers]);
+  }, [createRTC, updatePeer, logSystem]); // Removed peers dependency to fix flickering
 
   const handleExitRoom = useCallback(() => {
     Object.values(rtcMapRef.current).forEach(r => r.close('Exit Room'));
@@ -436,6 +433,24 @@ export default function RoomViewer() {
                </div>
              </>
            )}
+        </div>
+      </div>
+
+      {/* System Diagnostic Logs (On-screen for mobile debugging) */}
+      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 pointer-events-none z-50">
+        <div className="flex flex-col gap-2">
+          {systemLogs.map(log => (
+            <div 
+              key={log.id} 
+              className={`text-[10px] md:text-xs py-1 px-3 rounded-full border bg-black/80 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-auto ${
+                log.type === 'error' ? 'border-red-500/50 text-red-400' : 
+                log.type === 'success' ? 'border-green-500/50 text-green-400' : 
+                'border-neon-blue/30 text-neon-blue/80'
+              }`}
+            >
+              {log.msg}
+            </div>
+          ))}
         </div>
       </div>
     </div>
