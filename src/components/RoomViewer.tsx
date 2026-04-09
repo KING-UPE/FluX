@@ -195,12 +195,26 @@ export default function RoomViewer() {
     };
   }, [startConnection]);
 
+  const peerList = Object.values(peers);
+
+  useEffect(() => {
+    // If we are alone and in a manual room state, revert to autodiscovery state
+    if (mounted && connectionState === 'connected' && peerList.length === 0 && isManualRoom) {
+      setIsManualRoom(false);
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('room')) {
+          url.searchParams.delete('room'); // CLEAN URL if we find ourselves alone
+          window.history.replaceState({}, '', url.toString());
+        }
+      }
+    }
+  }, [peerList.length, isManualRoom, connectionState, mounted]);
+
   if (!mounted) return null;
   if (connectionState !== 'connected') {
     return <ConnectionLoader state={connectionState} onRetry={startConnection} />;
   }
-
-  const peerList = Object.values(peers);
 
   // Dynamic Theme Lighting (Blob & Master Branding)
   let glowColor = "bg-neon-blue/10";
