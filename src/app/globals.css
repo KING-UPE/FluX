@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+
+@theme inline {
+  --color-background: #050505;
+  --color-foreground: #ededed;
+
+  --color-neon-blue: #00f0ff;
+  --color-neon-pink: #ff007f;
+  --color-glass-bg: rgba(255, 255, 255, 0.05);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+
+  --animate-radar-spin: radar-spin 4s linear infinite;
+  --animate-ping-slow: ping-slow 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+  --animate-float: float 6s ease-in-out infinite;
+}
+
+@keyframes radar-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ping-slow {
+
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes cold-start-progress {
+  0% {
+    width: 0%;
+  }
+
+  20% {
+    width: 15%;
+  }
+
+  40% {
+    width: 35%;
+  }
+
+  60% {
+    width: 55%;
+  }
+
+  80% {
+    width: 70%;
+  }
+
+  100% {
+    width: 80%;
+  }
+}
+
+.animate-cold-start-progress {
+  animation: cold-start-progress 60s ease-out forwards;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  margin: 0;
+  overflow-x: hidden;
+  font-family: 'Inter', Arial, Helvetica, sans-serif;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: var(--color-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-glass-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
