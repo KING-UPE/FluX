@@ -121,7 +121,7 @@ export default function RoomViewer() {
       setConnectionState,
       (pin: string) => {
         setRoomPin(pin);
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && targetRoom) {
           const url = new URL(window.location.href);
           url.searchParams.set('room', pin);
           window.history.replaceState({}, '', url.toString());
@@ -338,7 +338,7 @@ export default function RoomViewer() {
 
            <div className="w-full h-px bg-white/5 my-8" />
 
-           {isManualRoom ? (
+           {(isManualRoom || peerList.length > 0) ? (
               <div className="w-full relative flex flex-col items-center mt-2">
                  <button 
                   onClick={handleExitRoom}
