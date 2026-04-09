@@ -262,7 +262,7 @@ export default function RoomViewer() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-max">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 auto-rows-max">
               {peerList.map(peer => (
                 <DeviceCard 
                   key={peer.id} 
@@ -279,31 +279,31 @@ export default function RoomViewer() {
         <div className="lg:hidden h-px w-full border-t border-dashed border-white/10 my-2" />
 
         {/* Right Side: Persistent Manual Pin Side */}
-        <div className="flex flex-col items-center justify-center p-10 bg-white/[0.02] border border-white/5 rounded-3xl w-full lg:w-[420px] flex-shrink-0 relative transition-all hover:bg-white/[0.03] min-h-[500px]">
+        <div className="flex flex-col items-center justify-center p-6 lg:p-8 bg-white/[0.02] border border-white/5 rounded-3xl w-full lg:w-[320px] xl:w-[360px] flex-shrink-0 relative transition-all hover:bg-white/[0.03] min-h-[500px]">
            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-           <h3 className="text-white/60 font-medium mb-8 uppercase tracking-widest text-sm">Room Invite</h3>
+           <h3 className="text-white/60 font-medium mb-8 uppercase tracking-widest text-xs">Room Invite</h3>
            
            {roomPin ? (
              <div className="flex flex-col gap-6 items-center w-full justify-center">
                <div className="p-4 bg-white rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.1)]">
                  {typeof window !== 'undefined' && (
-                   <QRCodeSVG value={`${window.location.origin}/?room=${roomPin}`} size={140} />
+                   <QRCodeSVG value={`${window.location.origin}/?room=${roomPin}`} size={110} />
                  )}
                </div>
                <div className="flex flex-col items-center">
-                 <p className="text-white/40 text-xs uppercase tracking-widest mb-3 font-semibold">Join Code</p>
-                 <div className="text-5xl font-mono text-white tracking-widest px-6 py-3 bg-white/5 border border-white/10 rounded-2xl shadow-inner">
+                 <p className="text-white/40 text-[10px] uppercase tracking-widest mb-2 font-semibold">Join Code</p>
+                 <div className="text-4xl font-mono text-white tracking-widest px-5 py-2.5 bg-white/5 border border-white/10 rounded-2xl shadow-inner">
                    {roomPin}
                  </div>
                </div>
              </div>
            ) : (
-              <div className="h-[290px] flex items-center justify-center"><div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin"/></div>
+              <div className="h-[260px] flex items-center justify-center"><div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin"/></div>
            )}
 
-           <div className="w-3/4 h-px bg-white/5 my-10" />
+           <div className="w-full h-px bg-white/5 my-8" />
 
-           <h3 className="text-white/40 text-xs uppercase tracking-widest mb-6 font-semibold text-center">Manually Enter Code</h3>
+           <h3 className="text-white/40 text-[10px] uppercase tracking-widest mb-6 font-semibold text-center">Manually Enter Code</h3>
            
            <div className="w-full relative flex flex-col items-center gap-6">
               <div className="flex gap-2 w-full justify-center">
@@ -315,14 +315,14 @@ export default function RoomViewer() {
                     onChange={e => handlePinChange(i, e.target.value)}
                     onKeyDown={e => handlePinKeyDown(i, e)}
                     maxLength={1}
-                    className="w-12 h-14 bg-black/40 border border-white/10 rounded-xl text-center text-2xl font-mono text-white focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all shadow-inner"
+                    className="w-10 h-12 bg-black/40 border border-white/10 rounded-xl text-center text-xl font-mono text-white focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all shadow-inner"
                   />
                 ))}
               </div>
               <button 
                 onClick={() => { const full = manualPinInput.join(''); if(full.length === 5) startConnection(full); }}
                 disabled={manualPinInput.join('').length !== 5}
-                className="w-full bg-white/10 text-white font-bold py-4 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-neon-blue hover:text-black transition-all duration-300 shadow-xl tracking-wide uppercase text-sm"
+                className="w-full bg-white/10 text-white font-bold py-3.5 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed hover:bg-neon-blue hover:text-black transition-all duration-300 shadow-xl tracking-wide uppercase text-sm"
               >
                 Join
               </button>
