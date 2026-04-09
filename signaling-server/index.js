@@ -24,30 +24,59 @@ const io = new Server(server, {
 const userRooms = {};
 const userInfo = {};
 
+// Global Room Alias Engine
+const roomAliases = {}; // Map of lanID -> 5-digit PIN
+const pinToRoom = {};   // Map of 5-digit PIN -> lanID
+
+function getAliasForRoom(lanID) {
+  if (!roomAliases[lanID]) {
+    let pin;
+    do {
+      pin = Math.floor(10000 + Math.random() * 90000).toString();
+    } while (pinToRoom[pin]);
+    roomAliases[lanID] = pin;
+    pinToRoom[pin] = lanID;
+  }
+  return roomAliases[lanID];
+}
+
 io.on('connection', (socket) => {
   console.log(`+ ${socket.id}`);
 
-  socket.on('join_room', async ({ deviceName, deviceType }) => {
-    const rawIp = socket.handshake.headers['x-forwarded-for'] || socket.conn.remoteAddress || '';
-    const isLocalDev = !socket.handshake.headers['x-forwarded-for'];
-    
-    let clientIp = rawIp.split(',')[0].trim();
-    
-    // IPv6 Hotspot / CGNAT Prefix Normalization
-    // Mobile hotspots assign distinct IPv6 addresses to each device (no NAT). We match them by their /64 subnet prefix.
-    if (clientIp.includes(':')) {
-      const parts = clientIp.split(':');
-      if (parts.length >= 4) {
-         clientIp = parts.slice(0, 4).join(':') + ':*';
+  socket.on('join_room', async ({ deviceName, deviceType, roomCode }) => {
+    let lanID;
+
+    if (roomCode && pinToRoom[roomCode]) {
+      // Manual PIN override: Force user into the requested room
+      lanID = pinToRoom[roomCode];
+      console.log(`  Manual PIN Override: ${roomCode} -> ${lanID}`);
+    } else {
+      // Auto-Discovery Fallback: Generate room from Public IP
+      const rawIp = socket.handshake.headers['x-forwarded-for'] || socket.conn.remoteAddress || '';
+      const isLocalDev = !socket.handshake.headers['x-forwarded-for'];
+      
+      let clientIp = rawIp.split(',')[0].trim();
+      
+      // IPv6 Hotspot / CGNAT Prefix Normalization
+      if (clientIp.includes(':')) {
+        const parts = clientIp.split(':');
+        if (parts.length >= 4) {
+           clientIp = parts.slice(0, 4).join(':') + ':*';
+        }
       }
+      lanID = isLocalDev ? 'local-dev-network' : clientIp;
     }
 
-    const lanID = isLocalDev ? 'local-dev-network' : clientIp;
+    // Assign or fetch the unified PIN for this room
+    const currentPin = getAliasForRoom(lanID);
 
     socket.join(lanID);
     userRooms[socket.id] = lanID;
     userInfo[socket.id] = { name: deviceName, deviceType: deviceType || 'device' };
-    console.log(`  ${deviceName} [${deviceType}] joined LAN: ${lanID}`);
+    console.log(`  ${deviceName} [${deviceType}] joined LAN: ${lanID} [PIN: ${currentPin}]`);
+
+    // Report connection config back safely to the UI
+    socket.emit('room_info', { pin: currentPin });
 
     const sockets = await io.in(lanID).fetchSockets();
     const peers = sockets
