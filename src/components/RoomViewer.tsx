@@ -51,6 +51,7 @@ export default function RoomViewer() {
   }, [updatePeer]);
 
   const [roomPin, setRoomPin] = useState<string>('');
+  const [isManualRoom, setIsManualRoom] = useState<boolean>(false);
   const [manualPinInput, setManualPinInput] = useState<string[]>(Array(5).fill(''));
   const pinInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -83,6 +84,8 @@ export default function RoomViewer() {
       const urlParams = new URLSearchParams(window.location.search);
       targetRoom = urlParams.get('room') || undefined;
     }
+    
+    setIsManualRoom(!!targetRoom);
 
     socketService.connect(
       (peer: PeerInfo) => {
@@ -335,7 +338,7 @@ export default function RoomViewer() {
 
            <div className="w-full h-px bg-white/5 my-8" />
 
-           {roomPin ? (
+           {isManualRoom ? (
               <div className="w-full relative flex flex-col items-center mt-2">
                  <button 
                   onClick={handleExitRoom}
