@@ -25,22 +25,11 @@ export default function RoomViewer() {
   
   const rtcMapRef = useRef<Record<string, WebRTCConnection>>({});
   const globalFileInputRef = useRef<HTMLInputElement>(null);
-  const [systemLogs, setSystemLogs] = useState<{msg: string, type: 'info'|'error'|'success', id: number}[]>([]);
-
-  const logSystem = useCallback((msg: string, type: 'info'|'error'|'success' = 'info') => {
-    setSystemLogs(prev => [{ msg, type, id: Date.now() }, ...prev].slice(0, 5));
-    console.log(`[SYS] ${msg}`);
-  }, []);
 
   const updatePeer = useCallback((id: string, update: Partial<PeerData>) => {
     setPeers(prev => {
       if (!prev[id]) return prev;
-      const updated = { ...prev[id], ...update };
-      // Merge stats to prevent flickering when partial updates arrive
-      if (update.stats && prev[id].stats) {
-        updated.stats = { ...prev[id].stats, ...update.stats };
-      }
-      return { ...prev, [id]: updated };
+      return { ...prev, [id]: { ...prev[id], ...update } };
     });
   }, []);
 
@@ -50,20 +39,14 @@ export default function RoomViewer() {
     }
 
     const rtc = new WebRTCConnection(peerId, isInitiator, () => {
-      logSystem(`P2P tunnel open with ${peerId.slice(0,6)}`, 'success');
+      console.log(`✓ P2P ready with ${peerId.slice(0,6)}`);
       updatePeer(peerId, { rtcState: 'connected', rtc });
     });
 
     rtc.peerConnection.onconnectionstatechange = () => {
       const state = rtc.peerConnection.connectionState;
-      if (state === 'connected') {
-        logSystem(`Connected to ${peerId.slice(0,6)}`, 'success');
-        updatePeer(peerId, { rtcState: 'connected' });
-      }
-      if (state === 'failed' || state === 'disconnected') {
-        logSystem(`Connection to ${peerId.slice(0,6)} ${state}`, 'error');
-        updatePeer(peerId, { rtcState: 'failed' });
-      }
+      if (state === 'connected') updatePeer(peerId, { rtcState: 'connected' });
+      if (state === 'failed' || state === 'disconnected') updatePeer(peerId, { rtcState: 'failed' });
     };
 
     rtcMapRef.current[peerId] = rtc;
@@ -140,7 +123,6 @@ export default function RoomViewer() {
       },
       setConnectionState,
       (pin: string) => {
-        logSystem(`Local room: ${pin}`, 'info');
         setRoomPin(pin);
         if (typeof window !== 'undefined' && targetRoom) {
           const url = new URL(window.location.href);
@@ -150,15 +132,13 @@ export default function RoomViewer() {
       },
       targetRoom
     );
-  }, [createRTC, updatePeer, logSystem]);
 
-  useEffect(() => {
-    const socket = socketService.socket;
-    if (!socket) return;
+    const bindSignaling = () => {
+      const socket = socketService.socket;
+      if (!socket) { setTimeout(bindSignaling, 300); return; }
 
-    const onOffer = async ({ offer, sender }: { offer: any, sender: string }) => {
-      logSystem(`Incoming offer from ${sender.slice(0,6)}`, 'info');
-      // Handle Glare: If we both sent an offer, the one with the "smaller" ID is the polite one.
+      socket.on('webrtc_offer', async ({ offer, sender }) => {
+        // Handle Glare: If we both sent an offer, the one with the "smaller" ID is the polite one.
         // A polite peer will rollback their own offer and accept the incoming one.
         const myId = socket.id || '';
         const isPolite = myId < sender;
@@ -170,6 +150,7 @@ export default function RoomViewer() {
            await currentRTC.handleOffer(offer);
            return;
         }
+
         const rtc = createRTC(sender, false, 'Incoming Offer');
         setPeers(prev => ({
           ...prev,
@@ -182,27 +163,19 @@ export default function RoomViewer() {
           }
         }));
         await rtc.handleOffer(offer);
+      });
+
+      socket.on('webrtc_answer', async ({ answer, sender }) => {
+        await rtcMapRef.current[sender]?.handleAnswer(answer);
+      });
+
+      socket.on('ice_candidate', async ({ candidate, sender }) => {
+        await rtcMapRef.current[sender]?.handleIceCandidate(candidate);
+      });
     };
 
-    const onAnswer = async ({ answer, sender }: { answer: any, sender: string }) => {
-      logSystem(`Received answer from ${sender.slice(0,6)}`, 'info');
-      await rtcMapRef.current[sender]?.handleAnswer(answer);
-    };
-
-    const onIce = async ({ candidate, sender }: { candidate: any, sender: string }) => {
-      await rtcMapRef.current[sender]?.handleIceCandidate(candidate);
-    };
-
-    socket.on('webrtc_offer', onOffer);
-    socket.on('webrtc_answer', onAnswer);
-    socket.on('ice_candidate', onIce);
-
-    return () => {
-      socket.off('webrtc_offer', onOffer);
-      socket.off('webrtc_answer', onAnswer);
-      socket.off('ice_candidate', onIce);
-    };
-  }, [createRTC, updatePeer, logSystem]); // Removed peers dependency to fix flickering
+    bindSignaling();
+  }, [createRTC, updatePeer]);
 
   const handleExitRoom = useCallback(() => {
     Object.values(rtcMapRef.current).forEach(r => r.close('Exit Room'));
@@ -438,24 +411,6 @@ export default function RoomViewer() {
                </div>
              </>
            )}
-        </div>
-      </div>
-
-      {/* System Diagnostic Logs (On-screen for mobile debugging) */}
-      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 pointer-events-none z-50">
-        <div className="flex flex-col gap-2">
-          {systemLogs.map(log => (
-            <div 
-              key={log.id} 
-              className={`text-[10px] md:text-xs py-1 px-3 rounded-full border bg-black/80 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-auto ${
-                log.type === 'error' ? 'border-red-500/50 text-red-400' : 
-                log.type === 'success' ? 'border-green-500/50 text-green-400' : 
-                'border-neon-blue/30 text-neon-blue/80'
-              }`}
-            >
-              {log.msg}
-            </div>
-          ))}
         </div>
       </div>
     </div>

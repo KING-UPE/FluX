@@ -38,16 +38,11 @@ export class FileSender {
     this.totalSize = files.reduce((acc, f) => acc + f.size, 0);
   }
 
-  private isStarted = false;
-  private responseHandler: ((data: ChunkData) => void) | null = null;
-
   public start() {
-    if (this.isStarted) return;
     if (!this.rtc.isOpen) {
       this.onError('P2P connection not ready.');
       return;
     }
-    this.isStarted = true;
 
     const payload = this.files.length <= 20 
       ? this.files.map(f => ({
@@ -68,7 +63,7 @@ export class FileSender {
       files: payload,
     }));
 
-    this.responseHandler = (data: ChunkData) => {
+    const handler = (data: ChunkData) => {
       if (typeof data === 'string') {
         const msg = JSON.parse(data);
         if (msg.type === 'ready') {
@@ -76,25 +71,13 @@ export class FileSender {
           this.updateStats(true); // Fire initial 0% progress immediately
           this.sendNextFile(0);
         }
-        else if (msg.type === 'cancel') {
-          this.cleanup();
-          this.onError('Receiver declined the transfer.');
-        }
+        else if (msg.type === 'cancel') this.onError('Receiver declined the transfer.');
         else if (msg.type === 'transfer_complete_ack') {
-          this.cleanup();
           this.onComplete();
         }
       }
     };
-    this.rtc.onData(this.responseHandler);
-  }
-
-  private cleanup() {
-    if (this.responseHandler) {
-      this.rtc.offData(this.responseHandler);
-      this.responseHandler = null;
-    }
-    this.isStarted = false;
+    this.rtc.onData(handler);
   }
 
   private async sendNextFile(index: number) {
