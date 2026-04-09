@@ -14,6 +14,7 @@ export class WebRTCConnection {
   private messageQueue: ChunkData[] = [];
   private onDataCallbacks: ((data: ChunkData) => void)[] = [];
   private onOpenCallback: (() => void) | null;
+  private heartbeatInterval: any = null;
 
   constructor(peerId: string, isInitiator: boolean, onOpen?: () => void) {
     this.peerId = peerId;
@@ -107,6 +108,7 @@ export class WebRTCConnection {
     ch.onopen = () => {
       console.log(`✓ DataChannel OPEN with ${this.peerId.slice(0,6)}`);
       this.flushMessageQueue();
+      this.startHeartbeat();
       this.onOpenCallback?.();
     };
 
@@ -183,12 +185,30 @@ export class WebRTCConnection {
     }
   }
 
+    }
+  }
+
+  private startHeartbeat() {
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    this.heartbeatInterval = setInterval(() => {
+      if (this.dataChannel?.readyState === 'open') {
+        this.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+      } else {
+        if (this.heartbeatInterval) {
+          clearInterval(this.heartbeatInterval);
+          this.heartbeatInterval = null;
+        }
+      }
+    }, 5000); // 5s heartbeat to keep mobile connections alive
+  }
+
   public get isOpen(): boolean {
     return this.dataChannel?.readyState === 'open';
   }
 
   public close(reason = 'Manual') {
     console.log(`[P2P ${this.peerId.slice(0,6)}] Finalizing Connection (Reason: ${reason})`);
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
     this.dataChannel?.close();
     this.peerConnection.close();
   }

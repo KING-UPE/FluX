@@ -25,6 +25,12 @@ export default function RoomViewer() {
   
   const rtcMapRef = useRef<Record<string, WebRTCConnection>>({});
   const globalFileInputRef = useRef<HTMLInputElement>(null);
+  const [systemLogs, setSystemLogs] = useState<{msg: string, type: 'info'|'error'|'success', id: number}[]>([]);
+
+  const logSystem = useCallback((msg: string, type: 'info'|'error'|'success' = 'info') => {
+    setSystemLogs(prev => [{ msg, type, id: Date.now() }, ...prev].slice(0, 5));
+    console.log(`[SYS] ${msg}`);
+  }, []);
 
   const updatePeer = useCallback((id: string, update: Partial<PeerData>) => {
     setPeers(prev => {
@@ -39,14 +45,20 @@ export default function RoomViewer() {
     }
 
     const rtc = new WebRTCConnection(peerId, isInitiator, () => {
-      console.log(`✓ P2P ready with ${peerId.slice(0,6)}`);
+      logSystem(`P2P tunnel open with ${peerId.slice(0,6)}`, 'success');
       updatePeer(peerId, { rtcState: 'connected', rtc });
     });
 
     rtc.peerConnection.onconnectionstatechange = () => {
       const state = rtc.peerConnection.connectionState;
-      if (state === 'connected') updatePeer(peerId, { rtcState: 'connected' });
-      if (state === 'failed' || state === 'disconnected') updatePeer(peerId, { rtcState: 'failed' });
+      if (state === 'connected') {
+        logSystem(`Connected to ${peerId.slice(0,6)}`, 'success');
+        updatePeer(peerId, { rtcState: 'connected' });
+      }
+      if (state === 'failed' || state === 'disconnected') {
+        logSystem(`Connection to ${peerId.slice(0,6)} ${state}`, 'error');
+        updatePeer(peerId, { rtcState: 'failed' });
+      }
     };
 
     rtcMapRef.current[peerId] = rtc;
@@ -123,6 +135,7 @@ export default function RoomViewer() {
       },
       setConnectionState,
       (pin: string) => {
+        logSystem(`Local room: ${pin}`, 'info');
         setRoomPin(pin);
         if (typeof window !== 'undefined' && targetRoom) {
           const url = new URL(window.location.href);
@@ -132,13 +145,15 @@ export default function RoomViewer() {
       },
       targetRoom
     );
+  }, [createRTC, updatePeer, logSystem]);
 
-    const bindSignaling = () => {
-      const socket = socketService.socket;
-      if (!socket) { setTimeout(bindSignaling, 300); return; }
+  useEffect(() => {
+    const socket = socketService.socket;
+    if (!socket) return;
 
-      socket.on('webrtc_offer', async ({ offer, sender }) => {
-        // Handle Glare: If we both sent an offer, the one with the "smaller" ID is the polite one.
+    const onOffer = async ({ offer, sender }: { offer: any, sender: string }) => {
+      logSystem(`Incoming offer from ${sender.slice(0,6)}`, 'info');
+      // Handle Glare: If we both sent an offer, the one with the "smaller" ID is the polite one.
         // A polite peer will rollback their own offer and accept the incoming one.
         const myId = socket.id || '';
         const isPolite = myId < sender;
@@ -149,6 +164,8 @@ export default function RoomViewer() {
            await currentRTC.peerConnection.setLocalDescription({ type: "rollback" } as any);
            await currentRTC.handleOffer(offer);
            return;
+        }
+
         }
 
         const rtc = createRTC(sender, false, 'Incoming Offer');
@@ -163,19 +180,27 @@ export default function RoomViewer() {
           }
         }));
         await rtc.handleOffer(offer);
-      });
-
-      socket.on('webrtc_answer', async ({ answer, sender }) => {
-        await rtcMapRef.current[sender]?.handleAnswer(answer);
-      });
-
-      socket.on('ice_candidate', async ({ candidate, sender }) => {
-        await rtcMapRef.current[sender]?.handleIceCandidate(candidate);
-      });
     };
 
-    bindSignaling();
-  }, [createRTC, updatePeer]);
+    const onAnswer = async ({ answer, sender }: { answer: any, sender: string }) => {
+      logSystem(`Received answer from ${sender.slice(0,6)}`, 'info');
+      await rtcMapRef.current[sender]?.handleAnswer(answer);
+    };
+
+    const onIce = async ({ candidate, sender }: { candidate: any, sender: string }) => {
+      await rtcMapRef.current[sender]?.handleIceCandidate(candidate);
+    };
+
+    socket.on('webrtc_offer', onOffer);
+    socket.on('webrtc_answer', onAnswer);
+    socket.on('ice_candidate', onIce);
+
+    return () => {
+      socket.off('webrtc_offer', onOffer);
+      socket.off('webrtc_answer', onAnswer);
+      socket.off('ice_candidate', onIce);
+    };
+  }, [createRTC, updatePeer, logSystem, peers]);
 
   const handleExitRoom = useCallback(() => {
     Object.values(rtcMapRef.current).forEach(r => r.close('Exit Room'));
