@@ -1,7 +1,7 @@
 import { WebRTCConnection, ChunkData } from './webrtc';
 
-const CHUNK_SIZE = 64 * 1024; // 64KB
-const MAX_BUFFERED = 4 * 1024 * 1024; // 4MB backpressure
+const CHUNK_SIZE = 16 * 1024; // safely 16KB maximum for iOS Safari SCTP limits
+const MAX_BUFFERED = 1 * 1024 * 1024; // 1MB conservative backpressure limit
 
 export interface TransferStats {
   progress: number; // 0-100
@@ -95,20 +95,20 @@ export class FileSender {
       let fileSent = 0;
 
       while (true) {
-        if (ch.bufferedAmount > MAX_BUFFERED) {
-          await new Promise<void>(resolve => {
-            ch.onbufferedamountlow = () => {
-              ch.onbufferedamountlow = null;
-              resolve();
-            };
-          });
-        }
-
         const { done, value } = await reader.read();
         if (done) break;
 
         let localOffset = 0;
         while (localOffset < value.byteLength) {
+          if (ch.bufferedAmount > MAX_BUFFERED) {
+            await new Promise<void>(resolve => {
+              ch.onbufferedamountlow = () => {
+                ch.onbufferedamountlow = null;
+                resolve();
+              };
+            });
+          }
+
           const end = Math.min(localOffset + CHUNK_SIZE, value.byteLength);
           ch.send(value.slice(localOffset, end));
           localOffset = end;
