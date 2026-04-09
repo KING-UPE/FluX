@@ -286,7 +286,7 @@ export default function RoomViewer() {
                 >
                   Join
                 </button>
-             </div>
+           </div>
           </div>
         </div>
       ) : (
@@ -298,6 +298,21 @@ export default function RoomViewer() {
               onStatusChange={(status) => updatePeer(peer.id, { activeStatus: status })}
             />
           ))}
+          
+          {/* Persistent Invite Ghost Card */}
+          {roomPin && (
+            <div className="flex flex-col items-center justify-center p-6 bg-white/[0.01] border-2 border-white/5 border-dashed rounded-3xl transition-all hover:bg-white/[0.03] min-h-[220px]">
+              {typeof window !== 'undefined' && (
+                <div className="p-2 bg-white rounded-xl mb-4 shadow-[0_0_15px_rgba(255,255,255,0.05)] opacity-80 hover:opacity-100 transition-opacity">
+                  <QRCodeSVG value={`${window.location.origin}/?room=${roomPin}`} size={70} />
+                </div>
+              )}
+              <p className="text-white/30 text-xs uppercase tracking-widest font-semibold mb-2 text-center">Add Device</p>
+              <div className="text-xl font-mono text-white/80 tracking-widest bg-black/20 px-4 py-2 rounded-xl border border-white/5">
+                {roomPin}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
