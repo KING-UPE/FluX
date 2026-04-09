@@ -94,6 +94,7 @@ export class FileSender {
       this.rtc.offData(this.responseHandler);
       this.responseHandler = null;
     }
+    this.isStarted = false;
   }
 
   private async sendNextFile(index: number) {

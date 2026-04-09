@@ -36,23 +36,17 @@ export default function RoomViewer() {
     setPeers(prev => {
       if (!prev[id]) return prev;
       const updated = { ...prev[id], ...update };
-      // Deep merge stats if provided
+      // Merge stats to prevent flickering when partial updates arrive
       if (update.stats && prev[id].stats) {
-         updated.stats = { ...prev[id].stats, ...update.stats };
+        updated.stats = { ...prev[id].stats, ...update.stats };
       }
       return { ...prev, [id]: updated };
     });
   }, []);
 
   const createRTC = useCallback((peerId: string, isInitiator: boolean, reason?: string): WebRTCConnection => {
-    const existing = rtcMapRef.current[peerId];
-    if (existing && (existing.peerConnection.connectionState === 'connected' || existing.peerConnection.connectionState === 'connecting')) {
-       // Only nuke if explicitly told to (e.g. glare handling needs a reset)
-       if (reason !== 'Glare Reset') return existing;
-    }
-
-    if (existing) {
-      existing.close(reason || 'Re-init');
+    if (rtcMapRef.current[peerId]) {
+      rtcMapRef.current[peerId].close(reason || 'Re-init');
     }
 
     const rtc = new WebRTCConnection(peerId, isInitiator, () => {
@@ -170,16 +164,11 @@ export default function RoomViewer() {
         const isPolite = myId < sender;
         const currentRTC = rtcMapRef.current[sender];
         
-        if (currentRTC) {
-          if (isPolite && currentRTC.peerConnection.signalingState !== 'stable') {
-             logSystem(`Glare: Rolling back local offer for ${sender.slice(0,6)}`, 'info');
-             await currentRTC.peerConnection.setLocalDescription({ type: "rollback" } as any);
-             await currentRTC.handleOffer(offer);
-             return;
-          } else if (!isPolite && currentRTC.peerConnection.signalingState !== 'stable') {
-             logSystem(`Glare: Ignoring incoming offer from ${sender.slice(0,6)}`, 'info');
-             return;
-          }
+        if (currentRTC && isPolite && currentRTC.peerConnection.signalingState !== 'stable') {
+           console.log(`[SIG] Glare detected, rollback for ${sender.slice(0,6)} (Polite)`);
+           await currentRTC.peerConnection.setLocalDescription({ type: "rollback" } as any);
+           await currentRTC.handleOffer(offer);
+           return;
         }
         const rtc = createRTC(sender, false, 'Incoming Offer');
         setPeers(prev => ({
