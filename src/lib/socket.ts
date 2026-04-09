@@ -82,12 +82,18 @@ class SocketService {
     onUserJoined: (peer: PeerInfo) => void,
     onExistingUsers: (peers: PeerInfo[]) => void,
     onUserLeft: (id: string) => void,
-    onStateChange: (state: ConnectionState) => void
+    onStateChange: (state: ConnectionState) => void,
+    onRoomInfo: (pin: string) => void,
+    manualRoomCode?: string | null
   ) {
     this.myDeviceInfo = {
       name: getOrCreateDeviceName(),
       type: getDeviceType()
     };
+
+    if (this.socket) {
+      this.socket.disconnect();
+    }
 
     this.socket = io(SIGNALING_SERVER_URL, {
       transports: ['websocket'],
@@ -103,6 +109,7 @@ class SocketService {
       this.socket?.emit('join_room', {
         deviceName: this.myDeviceInfo?.name,
         deviceType: this.myDeviceInfo?.type,
+        roomCode: manualRoomCode || undefined
       });
     });
 
@@ -110,6 +117,7 @@ class SocketService {
     this.socket.on('existing_users', (peers: PeerInfo[]) => onExistingUsers(peers));
     this.socket.on('user_joined', (peer: PeerInfo) => onUserJoined(peer));
     this.socket.on('user_left', (id: string) => onUserLeft(id));
+    this.socket.on('room_info', (data: { pin: string }) => onRoomInfo(data.pin));
   }
 
   disconnect() {
