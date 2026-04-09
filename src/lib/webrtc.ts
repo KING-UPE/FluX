@@ -26,7 +26,22 @@ export class WebRTCConnection {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
-          // ⛔ TURN SERVERS REMOVED ⛔
+        // Relay servers to handle mobile/cellular NAT traversal
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
       ],
       iceCandidatePoolSize: 10,
     });
@@ -74,6 +89,10 @@ export class WebRTCConnection {
 
     this.peerConnection.onicecandidate = (e) => {
       if (e.candidate) {
+        // Log candidate type to help debug mobile connectivity
+        if (e.candidate.candidate.includes('relay')) {
+           console.log(`[ICE ${this.peerId.slice(0,6)}] Found Relay Candidate!`);
+        }
         socketService.socket?.emit('ice_candidate', {
           candidate: e.candidate,
           to: this.peerId,
