@@ -33,8 +33,10 @@ export default function RoomViewer() {
     });
   }, []);
 
-  const createRTC = useCallback((peerId: string, isInitiator: boolean): WebRTCConnection => {
-    rtcMapRef.current[peerId]?.close();
+  const createRTC = useCallback((peerId: string, isInitiator: boolean, reason?: string): WebRTCConnection => {
+    if (rtcMapRef.current[peerId]) {
+      rtcMapRef.current[peerId].close(reason || 'Re-init');
+    }
 
     const rtc = new WebRTCConnection(peerId, isInitiator, () => {
       console.log(`✓ P2P ready with ${peerId.slice(0,6)}`);
@@ -97,7 +99,7 @@ export default function RoomViewer() {
             rtcState: 'connecting',
           }
         }));
-        const rtc = createRTC(peer.id, true);
+        const rtc = createRTC(peer.id, true, 'New User Joined');
         updatePeer(peer.id, { rtc });
       },
       (existingPeers: PeerInfo[]) => {
@@ -136,7 +138,20 @@ export default function RoomViewer() {
       if (!socket) { setTimeout(bindSignaling, 300); return; }
 
       socket.on('webrtc_offer', async ({ offer, sender }) => {
-        const rtc = createRTC(sender, false);
+        // Handle Glare: If we both sent an offer, the one with the "smaller" ID is the polite one.
+        // A polite peer will rollback their own offer and accept the incoming one.
+        const myId = socket.id || '';
+        const isPolite = myId < sender;
+        const currentRTC = rtcMapRef.current[sender];
+        
+        if (currentRTC && isPolite && currentRTC.peerConnection.signalingState !== 'stable') {
+           console.log(`[SIG] Glare detected, rollback for ${sender.slice(0,6)} (Polite)`);
+           await currentRTC.peerConnection.setLocalDescription({ type: "rollback" } as any);
+           await currentRTC.handleOffer(offer);
+           return;
+        }
+
+        const rtc = createRTC(sender, false, 'Incoming Offer');
         setPeers(prev => ({
           ...prev,
           [sender]: {
@@ -163,7 +178,7 @@ export default function RoomViewer() {
   }, [createRTC, updatePeer]);
 
   const handleExitRoom = useCallback(() => {
-    Object.values(rtcMapRef.current).forEach(r => r.close());
+    Object.values(rtcMapRef.current).forEach(r => r.close('Exit Room'));
     rtcMapRef.current = {};
     setPeers({});
     setRoomPin('');

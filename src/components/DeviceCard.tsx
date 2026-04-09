@@ -60,9 +60,13 @@ export default function DeviceCard({ peer, onStatusChange }: DeviceCardProps) {
   
   // Sync with parent state for multicast/global triggers
   useEffect(() => {
-    if (peer.activeStatus) setStatus(peer.activeStatus as any);
-    if (peer.stats !== undefined) setStats(peer.stats);
-  }, [peer.activeStatus, peer.stats]);
+    if (peer.activeStatus && peer.activeStatus !== status) {
+       setStatus(peer.activeStatus as any);
+    }
+    if (peer.stats && peer.stats !== stats) {
+       setStats(peer.stats);
+    }
+  }, [peer.activeStatus, peer.stats, status, stats]);
 
   // Setup receiver immediately when we have the RTC object
   useEffect(() => {

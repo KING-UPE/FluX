@@ -33,11 +33,20 @@ export class WebRTCConnection {
 
     this.peerConnection.onconnectionstatechange = () => {
       const state = this.peerConnection.connectionState;
-      console.log(`[P2P ${this.peerId.slice(0,6)}] ${state}`);
+      console.log(`[P2P ${this.peerId.slice(0,6)}] Connection State: ${state}`);
     };
 
     this.peerConnection.oniceconnectionstatechange = () => {
-      console.log(`[ICE ${this.peerId.slice(0,6)}] ${this.peerConnection.iceConnectionState}`);
+      const state = this.peerConnection.iceConnectionState;
+      console.log(`[ICE ${this.peerId.slice(0,6)}] ICE State: ${state}`);
+    };
+
+    this.peerConnection.onsignalingstatechange = () => {
+      console.log(`[SIG ${this.peerId.slice(0,6)}] Signaling: ${this.peerConnection.signalingState}`);
+    };
+
+    (this.peerConnection as any).onicecandidateerror = (e: any) => {
+      console.error(`[ICE ${this.peerId.slice(0,6)}] Candidate Error:`, e.errorCode, e.errorText, e.url);
     };
 
     if (isInitiator) {
@@ -159,7 +168,8 @@ export class WebRTCConnection {
     return this.dataChannel?.readyState === 'open';
   }
 
-  public close() {
+  public close(reason = 'Manual') {
+    console.log(`[P2P ${this.peerId.slice(0,6)}] Finalizing Connection (Reason: ${reason})`);
     this.dataChannel?.close();
     this.peerConnection.close();
   }
