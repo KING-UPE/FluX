@@ -8,6 +8,7 @@ export type ChunkData = ArrayBuffer | string;
  */
 export class WebRTCConnection {
   public peerConnection: RTCPeerConnection;
+  public peerId: string;
   public dataChannel: RTCDataChannel | null = null;
   private iceCandidateQueue: RTCIceCandidateInit[] = [];
   private messageQueue: ChunkData[] = [];
