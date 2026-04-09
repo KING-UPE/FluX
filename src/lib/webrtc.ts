@@ -185,9 +185,6 @@ export class WebRTCConnection {
     }
   }
 
-    }
-  }
-
   private startHeartbeat() {
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
     this.heartbeatInterval = setInterval(() => {
