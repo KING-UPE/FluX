@@ -28,13 +28,21 @@ io.on('connection', (socket) => {
   console.log(`+ ${socket.id}`);
 
   socket.on('join_room', async ({ deviceName, deviceType }) => {
-    // PHASE 1: Public IP Grouping (Auto-Discovery)
     const rawIp = socket.handshake.headers['x-forwarded-for'] || socket.conn.remoteAddress || '';
-    
-    // If hosted on Render, 'x-forwarded-for' will contain the user's home router Public IP.
-    // If running locally, it defaults to remoteAddress (e.g., ::1, 127.0.0.1, or 192.168.x.x).
     const isLocalDev = !socket.handshake.headers['x-forwarded-for'];
-    const lanID = isLocalDev ? 'local-dev-network' : rawIp.split(',')[0].trim();
+    
+    let clientIp = rawIp.split(',')[0].trim();
+    
+    // IPv6 Hotspot / CGNAT Prefix Normalization
+    // Mobile hotspots assign distinct IPv6 addresses to each device (no NAT). We match them by their /64 subnet prefix.
+    if (clientIp.includes(':')) {
+      const parts = clientIp.split(':');
+      if (parts.length >= 4) {
+         clientIp = parts.slice(0, 4).join(':') + ':*';
+      }
+    }
+
+    const lanID = isLocalDev ? 'local-dev-network' : clientIp;
 
     socket.join(lanID);
     userRooms[socket.id] = lanID;
