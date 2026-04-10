@@ -294,8 +294,9 @@ export class FileReceiver {
       } else {
         this.fallbackBuffers.push(data);
       }
+      const isFirstChunk = this.totalReceived === 0;
       this.totalReceived += data.byteLength;
-      this.updateStats();
+      this.updateStats(isFirstChunk);
     }
   }
 
@@ -348,9 +349,9 @@ export class FileReceiver {
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
-  private updateStats() {
+  private updateStats(force = false) {
     const elapsed = (Date.now() - this.startTime) / 1000;
-    if (elapsed < 0.5) return; 
+    if (!force && elapsed < 0.5) return; 
 
     const bytesPerSec = this.totalReceived / elapsed;
     const mbps = (bytesPerSec / (1024 * 1024)).toFixed(1);

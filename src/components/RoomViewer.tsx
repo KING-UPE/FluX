@@ -24,11 +24,43 @@ export default function RoomViewer() {
   const [peers, setPeers] = useState<Record<string, PeerData>>({});
   
   const rtcMapRef = useRef<Record<string, WebRTCConnection>>({});
+  const lastUpdateRef = useRef<Record<string, number>>({});
   const globalFileInputRef = useRef<HTMLInputElement>(null);
 
   const updatePeer = useCallback((id: string, update: Partial<PeerData>) => {
     setPeers(prev => {
       if (!prev[id]) return prev;
+      
+      // Shallow check to prevent redundant re-renders
+      const current = prev[id] as any;
+      const hasChange = Object.entries(update).some(([key, val]) => {
+        if (key === 'stats') {
+          // Throttle stats updates to avoid flooding React
+          const now = Date.now();
+          const lastUpdate = lastUpdateRef.current[id] || 0;
+          const s = val as TransferStats;
+          
+          if (!s) return !!current.stats; // True if we are clearing stats
+          
+          const progressChanged = Math.abs((current.stats?.progress || 0) - s.progress) >= 0.5;
+          const timeElapsed = now - lastUpdate > 150; // Max ~6 updates per second for progress
+
+          if (progressChanged || timeElapsed || !current.stats) {
+            lastUpdateRef.current[id] = now;
+            return true;
+          }
+          return false;
+        }
+        if (key === 'activeStatus') {
+          // Treat 'idle', null, and undefined as equivalent for comparison
+          const currentVal = current[key] || 'idle';
+          const newVal = val || 'idle';
+          return currentVal !== newVal;
+        }
+        return current[key] !== val;
+      });
+
+      if (!hasChange) return prev;
       return { ...prev, [id]: { ...prev[id], ...update } };
     });
   }, []);
@@ -76,6 +108,9 @@ export default function RoomViewer() {
   }, [manualPinInput]);
 
   const startConnection = useCallback(async (overridePin?: string) => {
+    // Only proceed if not already connecting or if we have a manual override
+    if (connectionState === 'connecting' && !overridePin) return; 
+    
     setConnectionState('waking');
 
     const isAwake = await socketService.wakeServer(setConnectionState);
@@ -95,22 +130,26 @@ export default function RoomViewer() {
         setPeers(prev => ({
           ...prev,
           [peer.id]: {
+            ...(prev[peer.id] || {}),
             id: peer.id, name: peer.name, deviceType: peer.deviceType,
-            rtcState: 'connecting',
+            rtcState: prev[peer.id]?.rtcState || 'connecting',
           }
         }));
         const rtc = createRTC(peer.id, true, 'New User Joined');
         updatePeer(peer.id, { rtc });
       },
       (existingPeers: PeerInfo[]) => {
-        const newPeers: Record<string, PeerData> = {};
-        existingPeers.forEach(p => {
-          newPeers[p.id] = {
-            id: p.id, name: p.name, deviceType: p.deviceType,
-            rtcState: 'connecting',
-          };
+        setPeers(prev => {
+          const next = { ...prev };
+          existingPeers.forEach(p => {
+            next[p.id] = {
+              ...(next[p.id] || {}),
+              id: p.id, name: p.name, deviceType: p.deviceType,
+              rtcState: next[p.id]?.rtcState || 'connecting',
+            };
+          });
+          return next;
         });
-        setPeers(prev => ({ ...prev, ...newPeers }));
       },
       (leftId: string) => {
         rtcMapRef.current[leftId]?.close();
@@ -184,7 +223,7 @@ export default function RoomViewer() {
       socket.off('webrtc_answer', handleAnswer);
       socket.off('ice_candidate', handleIceCandidate);
     };
-  }, [connectionState, createRTC]); // Re-bind if connection state changes (e.g. reconnect)
+  }, [createRTC, connectionState]); // Watch connectionState to ensure listeners bind once socket is ready
 
   const handleExitRoom = useCallback(() => {
     Object.values(rtcMapRef.current).forEach(r => r.close('Exit Room'));
@@ -219,6 +258,7 @@ export default function RoomViewer() {
       socketService.disconnect();
     };
   }, [startConnection]);
+
 
   const peerList = Object.values(peers);
 
@@ -348,6 +388,7 @@ export default function RoomViewer() {
                   key={peer.id} 
                   peer={peer} 
                   onStatusChange={(status) => updatePeer(peer.id, { activeStatus: status })}
+                  onStatsUpdate={(stats) => updatePeer(peer.id, { stats })}
                 />
               ))}
             </div>

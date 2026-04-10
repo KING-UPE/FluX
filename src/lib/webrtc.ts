@@ -46,7 +46,13 @@ export class WebRTCConnection {
     };
 
     (this.peerConnection as any).onicecandidateerror = (e: any) => {
-      console.error(`[ICE ${this.peerId.slice(0,6)}] Candidate Error:`, e.errorCode, e.errorText, e.url);
+      // Error 701 = STUN host lookup received error (often just no internet).
+      // We silence this to keep logs clean for LAN-only mode.
+      if (e.errorCode === 701) {
+        console.warn(`[ICE ${this.peerId.slice(0,6)}] STUN lookup failed (offline/LAN-only mode)`);
+      } else {
+        console.error(`[ICE ${this.peerId.slice(0,6)}] Candidate Error:`, e.errorCode, e.errorText, e.url);
+      }
     };
 
     if (isInitiator) {

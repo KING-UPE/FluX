@@ -16,7 +16,8 @@ interface PeerData {
 
 interface DeviceCardProps {
   peer: PeerData;
-  onStatusChange?: (status: string) => void;
+  onStatusChange: (status: any) => void;
+  onStatsUpdate: (stats: TransferStats | null) => void;
 }
 
 function DeviceIcon({ type, color }: { type: string, color: string }) {
@@ -40,10 +41,10 @@ function DeviceIcon({ type, color }: { type: string, color: string }) {
   );
 }
 
-export default function DeviceCard({ peer, onStatusChange }: DeviceCardProps) {
+export default function DeviceCard({ peer, onStatusChange, onStatsUpdate }: DeviceCardProps) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'sending' | 'receiving' | 'incoming_req' | 'done' | 'error'>('idle');
-  const [stats, setStats] = useState<TransferStats | null>(null);
+  const status = peer.activeStatus || 'idle';
+  const stats = peer.stats || null;
   const [incomingReq, setIncomingReq] = useState<IncomingRequest | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -53,23 +54,8 @@ export default function DeviceCard({ peer, onStatusChange }: DeviceCardProps) {
 
   const { name, deviceType, rtcState, rtc } = peer;
 
-  useEffect(() => {
-    onStatusChange?.(status);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
   
-  // Sync with parent state for multicast/global triggers
-  useEffect(() => {
-    if (peer.activeStatus && peer.activeStatus !== status) {
-       setStatus(peer.activeStatus as any);
-    }
-  }, [peer.activeStatus, status]);
 
-  useEffect(() => {
-    if (peer.stats && peer.stats.progress !== stats?.progress) {
-       setStats(peer.stats);
-    }
-  }, [peer.stats, stats]);
 
   // Setup receiver immediately when we have the RTC object
   useEffect(() => {
@@ -78,20 +64,20 @@ export default function DeviceCard({ peer, onStatusChange }: DeviceCardProps) {
         rtc,
         (req) => {
           setIncomingReq(req);
-          setStatus('incoming_req');
+          onStatusChange('incoming_req');
         },
         (s) => {
-          setStats(s);
-          setStatus('receiving');
+          onStatsUpdate(s);
+          onStatusChange('receiving');
         },
         () => {
-          setStatus('done');
-          setTimeout(() => { setStatus('idle'); setStats(null); }, 4000);
+          onStatusChange('done');
+          setTimeout(() => { onStatusChange('idle'); onStatsUpdate(null); }, 4000);
         },
         (err) => {
-           setStatus('error');
+           onStatusChange('error');
            setErrorMsg(err);
-           setTimeout(() => { setStatus('idle'); setErrorMsg(''); }, 5000);
+           setTimeout(() => { onStatusChange('idle'); setErrorMsg(''); }, 5000);
         }
       );
       receiverRef.current = receiver;
@@ -112,18 +98,18 @@ export default function DeviceCard({ peer, onStatusChange }: DeviceCardProps) {
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
 
-    setStatus('sending');
+    onStatusChange('sending');
     const sender = new FileSender(
       fileArray, rtc,
-      (s) => setStats(s),
+      (s) => onStatsUpdate(s),
       () => {
-        setStatus('done');
-        setTimeout(() => { setStatus('idle'); setStats(null); }, 4000);
+        onStatusChange('done');
+        setTimeout(() => { onStatusChange('idle'); onStatsUpdate(null); }, 4000);
       },
       (err) => {
-        setStatus('error');
+        onStatusChange('error');
         setErrorMsg(err);
-        setTimeout(() => { setStatus('idle'); setErrorMsg(''); }, 5000);
+        setTimeout(() => { onStatusChange('idle'); setErrorMsg(''); }, 5000);
       }
     );
     sender.start();
@@ -226,7 +212,7 @@ export default function DeviceCard({ peer, onStatusChange }: DeviceCardProps) {
               <button 
                 onClick={() => {
                   receiverRef.current?.decline();
-                  setStatus('idle');
+                  onStatusChange('idle');
                   setIncomingReq(null);
                 }}
                 className="flex-1 py-2 px-4 bg-white/5 hover:bg-white/10 text-white/70 border border-white/20 rounded-xl text-sm font-medium transition-colors"
