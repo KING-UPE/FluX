@@ -63,10 +63,13 @@ export default function DeviceCard({ peer, onStatusChange }: DeviceCardProps) {
     if (peer.activeStatus && peer.activeStatus !== status) {
        setStatus(peer.activeStatus as any);
     }
-    if (peer.stats && peer.stats !== stats) {
+  }, [peer.activeStatus, status]);
+
+  useEffect(() => {
+    if (peer.stats && peer.stats.progress !== stats?.progress) {
        setStats(peer.stats);
     }
-  }, [peer.activeStatus, peer.stats, status, stats]);
+  }, [peer.stats, stats]);
 
   // Setup receiver immediately when we have the RTC object
   useEffect(() => {

@@ -22,6 +22,7 @@ export class FileSender {
   private startTime = 0;
   private lastStatsTime = 0;
   private currentFileName = '';
+  private dataHandler: ((data: ChunkData) => void) | null = null;
 
   constructor(
     files: File[],
@@ -63,21 +64,32 @@ export class FileSender {
       files: payload,
     }));
 
-    const handler = (data: ChunkData) => {
+    this.dataHandler = (data: ChunkData) => {
       if (typeof data === 'string') {
         const msg = JSON.parse(data);
         if (msg.type === 'ready') {
           this.startTime = Date.now();
-          this.updateStats(true); // Fire initial 0% progress immediately
+          this.updateStats(true); 
           this.sendNextFile(0);
         }
-        else if (msg.type === 'cancel') this.onError('Receiver declined the transfer.');
+        else if (msg.type === 'cancel') {
+          this.cleanup();
+          this.onError('Receiver declined the transfer.');
+        }
         else if (msg.type === 'transfer_complete_ack') {
+          this.cleanup();
           this.onComplete();
         }
       }
     };
-    this.rtc.onData(handler);
+    this.rtc.onData(this.dataHandler);
+  }
+
+  private cleanup() {
+    if (this.dataHandler) {
+      this.rtc.offData(this.dataHandler);
+      this.dataHandler = null;
+    }
   }
 
   private async sendNextFile(index: number) {
@@ -141,6 +153,7 @@ export class FileSender {
       this.rtc.send(JSON.stringify({ type: 'file_done' }));
       this.sendNextFile(index + 1);
     } catch (e) {
+      this.cleanup();
       this.onError('Streaming error: ' + (e as Error).message);
     }
   }

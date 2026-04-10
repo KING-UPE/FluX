@@ -133,49 +133,58 @@ export default function RoomViewer() {
       targetRoom
     );
 
-    const bindSignaling = () => {
-      const socket = socketService.socket;
-      if (!socket) { setTimeout(bindSignaling, 300); return; }
+    // Signaling listeners are now handled in a dedicated useEffect for proper cleanup.
+  }, [createRTC, updatePeer]);
 
-      socket.on('webrtc_offer', async ({ offer, sender }) => {
-        // Handle Glare: If we both sent an offer, the one with the "smaller" ID is the polite one.
-        // A polite peer will rollback their own offer and accept the incoming one.
-        const myId = socket.id || '';
-        const isPolite = myId < sender;
-        const currentRTC = rtcMapRef.current[sender];
-        
-        if (currentRTC && isPolite && currentRTC.peerConnection.signalingState !== 'stable') {
-           console.log(`[SIG] Glare detected, rollback for ${sender.slice(0,6)} (Polite)`);
-           await currentRTC.peerConnection.setLocalDescription({ type: "rollback" } as any);
-           await currentRTC.handleOffer(offer);
-           return;
+  useEffect(() => {
+    const socket = socketService.socket;
+    if (!socket) return;
+
+    const handleOffer = async ({ offer, sender }: { offer: any, sender: string }) => {
+      // Handle Glare: If we both sent an offer, the one with the "smaller" ID is the polite one.
+      const myId = socket.id || '';
+      const isPolite = myId < sender;
+      const currentRTC = rtcMapRef.current[sender];
+      
+      if (currentRTC && isPolite && currentRTC.peerConnection.signalingState !== 'stable') {
+         console.log(`[SIG] Glare detected, rollback for ${sender.slice(0,6)} (Polite)`);
+         await currentRTC.peerConnection.setLocalDescription({ type: "rollback" } as any);
+         await currentRTC.handleOffer(offer);
+         return;
+      }
+
+      const rtc = createRTC(sender, false, 'Incoming Offer');
+      setPeers(prev => ({
+        ...prev,
+        [sender]: {
+          ...prev[sender],
+          id: sender,
+          name: prev[sender]?.name || `Node-${sender.slice(0,4)}`,
+          deviceType: prev[sender]?.deviceType || 'device',
+          rtcState: 'connecting', rtc
         }
-
-        const rtc = createRTC(sender, false, 'Incoming Offer');
-        setPeers(prev => ({
-          ...prev,
-          [sender]: {
-            ...prev[sender],
-            id: sender,
-            name: prev[sender]?.name || `Node-${sender.slice(0,4)}`,
-            deviceType: prev[sender]?.deviceType || 'device',
-            rtcState: 'connecting', rtc
-          }
-        }));
-        await rtc.handleOffer(offer);
-      });
-
-      socket.on('webrtc_answer', async ({ answer, sender }) => {
-        await rtcMapRef.current[sender]?.handleAnswer(answer);
-      });
-
-      socket.on('ice_candidate', async ({ candidate, sender }) => {
-        await rtcMapRef.current[sender]?.handleIceCandidate(candidate);
-      });
+      }));
+      await rtc.handleOffer(offer);
     };
 
-    bindSignaling();
-  }, [createRTC, updatePeer]);
+    const handleAnswer = async ({ answer, sender }: { answer: any, sender: string }) => {
+      await rtcMapRef.current[sender]?.handleAnswer(answer);
+    };
+
+    const handleIceCandidate = async ({ candidate, sender }: { candidate: any, sender: string }) => {
+      await rtcMapRef.current[sender]?.handleIceCandidate(candidate);
+    };
+
+    socket.on('webrtc_offer', handleOffer);
+    socket.on('webrtc_answer', handleAnswer);
+    socket.on('ice_candidate', handleIceCandidate);
+
+    return () => {
+      socket.off('webrtc_offer', handleOffer);
+      socket.off('webrtc_answer', handleAnswer);
+      socket.off('ice_candidate', handleIceCandidate);
+    };
+  }, [connectionState, createRTC]); // Re-bind if connection state changes (e.g. reconnect)
 
   const handleExitRoom = useCallback(() => {
     Object.values(rtcMapRef.current).forEach(r => r.close('Exit Room'));
