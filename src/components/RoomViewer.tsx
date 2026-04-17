@@ -290,36 +290,33 @@ export default function RoomViewer() {
     }
   }, [peerList.length, isManualRoom, connectionState, mounted]);
 
+  // ── Theme computation (must be before early returns to honour Rules of Hooks) ──
+  const computedTheme = React.useMemo((): ThemeColors => {
+    const activePeers = Object.values(peers);
+    if (connectionState !== 'connected') {
+      return { themeText: "text-amber-400", themeBg: "bg-amber-400", themeBorder: "border-amber-400", themeShadow: "shadow-[0_0_10px_#f59e0b]", themeHover: "hover:bg-amber-400 hover:text-black hover:shadow-[0_0_15px_#f59e0b] hover:border-transparent", glowColor: "bg-amber-400/20", accent: "#f59e0b" };
+    } else if (activePeers.some(p => p.activeStatus === 'error' || p.rtcState === 'failed')) {
+      return { themeText: "text-red-500", themeBg: "bg-red-500", themeBorder: "border-red-500", themeShadow: "shadow-[0_0_10px_#ef4444]", themeHover: "hover:bg-red-500 hover:text-black hover:shadow-[0_0_15px_#ef4444] hover:border-transparent", glowColor: "bg-red-500/20", accent: "#ef4444" };
+    } else if (activePeers.some(p => p.activeStatus === 'incoming_req')) {
+      return { themeText: "text-purple-500", themeBg: "bg-purple-500", themeBorder: "border-purple-500", themeShadow: "shadow-[0_0_10px_#a855f7]", themeHover: "hover:bg-purple-500 hover:text-black hover:shadow-[0_0_15px_#a855f7] hover:border-transparent", glowColor: "bg-purple-500/30", accent: "#a855f7" };
+    } else if (activePeers.some(p => p.activeStatus === 'done')) {
+      return { themeText: "text-green-500", themeBg: "bg-green-500", themeBorder: "border-green-500", themeShadow: "shadow-[0_0_10px_#4ade80]", themeHover: "hover:bg-green-400 hover:text-black hover:shadow-[0_0_15px_#4ade80] hover:border-transparent", glowColor: "bg-green-500/20", accent: "#4ade80" };
+    } else if (activePeers.some(p => p.activeStatus === 'sending' || p.activeStatus === 'receiving')) {
+      return { themeText: "text-neon-blue", themeBg: "bg-neon-blue", themeBorder: "border-neon-blue", themeShadow: "shadow-[0_0_10px_#00f0ff]", themeHover: "hover:bg-neon-blue hover:text-black hover:shadow-[0_0_15px_#00f0ff] hover:border-transparent", glowColor: "bg-neon-blue/40 animate-pulse", accent: "#00f0ff" };
+    }
+    return defaultTheme;
+  }, [connectionState, peers]);
+
+  // Sync into global context BEFORE early returns
+  useEffect(() => { setTheme(computedTheme); }, [computedTheme, setTheme]);
+
   if (!mounted) return null;
   if (connectionState !== 'connected') {
     return <ConnectionLoader state={connectionState} onRetry={startConnection} />;
   }
 
-  // Dynamic Theme Lighting (Blob & Master Branding)
-  let glowColor = "bg-neon-blue/10";
-  let themeText = "text-neon-blue";
-  let themeBg = "bg-neon-blue";
-  let themeBorder = "border-neon-blue";
-  let themeShadow = "shadow-[0_0_10px_#00f0ff]";
-  let themeHover = "hover:bg-neon-blue hover:text-black hover:shadow-[0_0_15px_#00f0ff] hover:border-transparent";
-  let accent = "#00f0ff";
-
-  if (connectionState !== 'connected') {
-     glowColor = "bg-amber-400/20"; themeText = "text-amber-400"; themeBg = "bg-amber-400"; themeBorder = "border-amber-400"; themeShadow = "shadow-[0_0_10px_#f59e0b]"; themeHover = "hover:bg-amber-400 hover:text-black hover:shadow-[0_0_15px_#f59e0b] hover:border-transparent"; accent = "#f59e0b";
-  } else if (peerList.some(p => p.activeStatus === 'error' || p.rtcState === 'failed')) {
-     glowColor = "bg-red-500/20"; themeText = "text-red-500"; themeBg = "bg-red-500"; themeBorder = "border-red-500"; themeShadow = "shadow-[0_0_10px_#ef4444]"; themeHover = "hover:bg-red-500 hover:text-black hover:shadow-[0_0_15px_#ef4444] hover:border-transparent"; accent = "#ef4444";
-  } else if (peerList.some(p => p.activeStatus === 'incoming_req')) {
-     glowColor = "bg-purple-500/30"; themeText = "text-purple-500"; themeBg = "bg-purple-500"; themeBorder = "border-purple-500"; themeShadow = "shadow-[0_0_10px_#a855f7]"; themeHover = "hover:bg-purple-500 hover:text-black hover:shadow-[0_0_15px_#a855f7] hover:border-transparent"; accent = "#a855f7";
-  } else if (peerList.some(p => p.activeStatus === 'done')) {
-     glowColor = "bg-green-500/20"; themeText = "text-green-500"; themeBg = "bg-green-500"; themeBorder = "border-green-500"; themeShadow = "shadow-[0_0_10px_#4ade80]"; themeHover = "hover:bg-green-400 hover:text-black hover:shadow-[0_0_15px_#4ade80] hover:border-transparent"; accent = "#4ade80";
-  } else if (peerList.some(p => p.activeStatus === 'sending' || p.activeStatus === 'receiving')) {
-     glowColor = "bg-neon-blue/40 animate-pulse";
-  }
-
-  // Sync computed theme into global context for Footer + other consumers
-  const newTheme: ThemeColors = { themeText, themeBg, themeBorder, themeShadow, themeHover, glowColor, accent };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setTheme(newTheme); }, [themeText]);
+  // Destructure computed theme for use in JSX
+  const { themeText, themeBg, themeBorder, themeShadow, themeHover, glowColor } = computedTheme;
 
   // Multicast Feature
   const handleGlobalSend = (e: React.ChangeEvent<HTMLInputElement>) => {
