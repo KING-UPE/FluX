@@ -7,6 +7,7 @@ import ConnectionLoader from "./ConnectionLoader";
 import { socketService, PeerInfo, ConnectionState } from "@/lib/socket";
 import { WebRTCConnection, fetchTurnServers } from "@/lib/webrtc";
 import { FileSender, TransferStats } from "@/lib/fileTransfer";
+import { useAppTheme, ThemeColors, defaultTheme } from "@/lib/themeContext";
 
 interface PeerData {
   id: string;
@@ -23,6 +24,7 @@ export default function RoomViewer() {
   const [connectionState, setConnectionState] = useState<ConnectionState>('waking');
   const [isSecure, setIsSecure] = useState(true);
   const [peers, setPeers] = useState<Record<string, PeerData>>({});
+  const { setTheme } = useAppTheme();
   
   const rtcMapRef = useRef<Record<string, WebRTCConnection>>({});
   const lastUpdateRef = useRef<Record<string, number>>({});
@@ -300,18 +302,24 @@ export default function RoomViewer() {
   let themeBorder = "border-neon-blue";
   let themeShadow = "shadow-[0_0_10px_#00f0ff]";
   let themeHover = "hover:bg-neon-blue hover:text-black hover:shadow-[0_0_15px_#00f0ff] hover:border-transparent";
+  let accent = "#00f0ff";
 
   if (connectionState !== 'connected') {
-     glowColor = "bg-amber-400/20"; themeText = "text-amber-400"; themeBg = "bg-amber-400"; themeBorder = "border-amber-400"; themeShadow = "shadow-[0_0_10px_#f59e0b]"; themeHover = "hover:bg-amber-400 hover:text-black hover:shadow-[0_0_15px_#f59e0b] hover:border-transparent";
+     glowColor = "bg-amber-400/20"; themeText = "text-amber-400"; themeBg = "bg-amber-400"; themeBorder = "border-amber-400"; themeShadow = "shadow-[0_0_10px_#f59e0b]"; themeHover = "hover:bg-amber-400 hover:text-black hover:shadow-[0_0_15px_#f59e0b] hover:border-transparent"; accent = "#f59e0b";
   } else if (peerList.some(p => p.activeStatus === 'error' || p.rtcState === 'failed')) {
-     glowColor = "bg-red-500/20"; themeText = "text-red-500"; themeBg = "bg-red-500"; themeBorder = "border-red-500"; themeShadow = "shadow-[0_0_10px_#ef4444]"; themeHover = "hover:bg-red-500 hover:text-black hover:shadow-[0_0_15px_#ef4444] hover:border-transparent";
+     glowColor = "bg-red-500/20"; themeText = "text-red-500"; themeBg = "bg-red-500"; themeBorder = "border-red-500"; themeShadow = "shadow-[0_0_10px_#ef4444]"; themeHover = "hover:bg-red-500 hover:text-black hover:shadow-[0_0_15px_#ef4444] hover:border-transparent"; accent = "#ef4444";
   } else if (peerList.some(p => p.activeStatus === 'incoming_req')) {
-     glowColor = "bg-purple-500/30"; themeText = "text-purple-500"; themeBg = "bg-purple-500"; themeBorder = "border-purple-500"; themeShadow = "shadow-[0_0_10px_#a855f7]"; themeHover = "hover:bg-purple-500 hover:text-black hover:shadow-[0_0_15px_#a855f7] hover:border-transparent";
+     glowColor = "bg-purple-500/30"; themeText = "text-purple-500"; themeBg = "bg-purple-500"; themeBorder = "border-purple-500"; themeShadow = "shadow-[0_0_10px_#a855f7]"; themeHover = "hover:bg-purple-500 hover:text-black hover:shadow-[0_0_15px_#a855f7] hover:border-transparent"; accent = "#a855f7";
   } else if (peerList.some(p => p.activeStatus === 'done')) {
-     glowColor = "bg-green-500/20"; themeText = "text-green-500"; themeBg = "bg-green-500"; themeBorder = "border-green-500"; themeShadow = "shadow-[0_0_10px_#4ade80]"; themeHover = "hover:bg-green-400 hover:text-black hover:shadow-[0_0_15px_#4ade80] hover:border-transparent";
+     glowColor = "bg-green-500/20"; themeText = "text-green-500"; themeBg = "bg-green-500"; themeBorder = "border-green-500"; themeShadow = "shadow-[0_0_10px_#4ade80]"; themeHover = "hover:bg-green-400 hover:text-black hover:shadow-[0_0_15px_#4ade80] hover:border-transparent"; accent = "#4ade80";
   } else if (peerList.some(p => p.activeStatus === 'sending' || p.activeStatus === 'receiving')) {
      glowColor = "bg-neon-blue/40 animate-pulse";
   }
+
+  // Sync computed theme into global context for Footer + other consumers
+  const newTheme: ThemeColors = { themeText, themeBg, themeBorder, themeShadow, themeHover, glowColor, accent };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setTheme(newTheme); }, [themeText]);
 
   // Multicast Feature
   const handleGlobalSend = (e: React.ChangeEvent<HTMLInputElement>) => {
