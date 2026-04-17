@@ -2,9 +2,47 @@ import { socketService } from './socket';
 
 export type ChunkData = ArrayBuffer | string;
 
+// ── Cached ICE servers (fetched once, reused for all connections) ──
+let cachedIceServers: RTCIceServer[] | null = null;
+
 /**
- * WebRTC connection for direct peer-to-peer file transfer over LAN.
- * No data touches the internet — files fly directly between devices on Wi-Fi.
+ * Fetch TURN server credentials from Metered.ca free API.
+ * Call this once at app startup — results are cached globally.
+ */
+export async function fetchTurnServers(): Promise<RTCIceServer[]> {
+  if (cachedIceServers) return cachedIceServers;
+
+  const fallback: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+
+  const apiKey = process.env.NEXT_PUBLIC_METERED_API_KEY;
+  if (!apiKey) {
+    console.warn('[TURN] No NEXT_PUBLIC_METERED_API_KEY set — using STUN only (P2P will fail across NATs)');
+    cachedIceServers = fallback;
+    return fallback;
+  }
+
+  try {
+    const resp = await fetch(
+      `https://flux.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`
+    );
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const servers: RTCIceServer[] = await resp.json();
+    console.log(`[TURN] Fetched ${servers.length} ICE servers from Metered.ca`);
+    cachedIceServers = [...fallback, ...servers];
+    return cachedIceServers;
+  } catch (e) {
+    console.error('[TURN] Failed to fetch TURN credentials, falling back to STUN:', e);
+    cachedIceServers = fallback;
+    return fallback;
+  }
+}
+
+/**
+ * WebRTC connection for direct peer-to-peer file transfer.
+ * Uses TURN relay when direct P2P fails (mobile, cellular, symmetric NAT).
  */
 export class WebRTCConnection {
   public peerConnection: RTCPeerConnection;
@@ -15,27 +53,9 @@ export class WebRTCConnection {
   private onDataCallbacks: ((data: ChunkData) => void)[] = [];
   private onOpenCallback: (() => void) | null;
 
-  constructor(peerId: string, isInitiator: boolean, onOpen?: () => void) {
+  constructor(peerId: string, isInitiator: boolean, iceServers: RTCIceServer[], onOpen?: () => void) {
     this.peerId = peerId;
     this.onOpenCallback = onOpen || null;
-
-    const iceServers: RTCIceServer[] = [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-    ];
-
-    const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
-    const turnUser = process.env.NEXT_PUBLIC_TURN_USERNAME;
-    const turnPass = process.env.NEXT_PUBLIC_TURN_PASSWORD;
-
-    if (turnUrl) {
-      iceServers.push({
-        urls: turnUrl,
-        username: turnUser,
-        credential: turnPass,
-      });
-    }
 
     this.peerConnection = new RTCPeerConnection({
       iceServers,

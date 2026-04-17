@@ -5,7 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import DeviceCard from "./DeviceCard";
 import ConnectionLoader from "./ConnectionLoader";
 import { socketService, PeerInfo, ConnectionState } from "@/lib/socket";
-import { WebRTCConnection } from "@/lib/webrtc";
+import { WebRTCConnection, fetchTurnServers } from "@/lib/webrtc";
 import { FileSender, TransferStats } from "@/lib/fileTransfer";
 
 interface PeerData {
@@ -26,6 +26,7 @@ export default function RoomViewer() {
   
   const rtcMapRef = useRef<Record<string, WebRTCConnection>>({});
   const lastUpdateRef = useRef<Record<string, number>>({});
+  const iceServersRef = useRef<RTCIceServer[]>([{ urls: 'stun:stun.l.google.com:19302' }]);
   const globalFileInputRef = useRef<HTMLInputElement>(null);
 
   const updatePeer = useCallback((id: string, update: Partial<PeerData>) => {
@@ -71,7 +72,7 @@ export default function RoomViewer() {
       rtcMapRef.current[peerId].close(reason || 'Re-init');
     }
 
-    const rtc = new WebRTCConnection(peerId, isInitiator, () => {
+    const rtc = new WebRTCConnection(peerId, isInitiator, iceServersRef.current, () => {
       console.log(`✓ P2P ready with ${peerId.slice(0,6)}`);
       updatePeer(peerId, { rtcState: 'connected', rtc });
     });
@@ -255,7 +256,13 @@ export default function RoomViewer() {
     if (typeof window !== 'undefined') {
       setIsSecure(window.isSecureContext);
     }
-    startConnection();
+
+    // Fetch TURN credentials before starting any P2P connections
+    fetchTurnServers().then(servers => {
+      iceServersRef.current = servers;
+      startConnection();
+    });
+
     setMounted(true);
     return () => {
       Object.values(rtcMapRef.current).forEach(r => r.close());
