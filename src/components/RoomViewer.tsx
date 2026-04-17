@@ -28,6 +28,7 @@ export default function RoomViewer() {
   const lastUpdateRef = useRef<Record<string, number>>({});
   const iceServersRef = useRef<RTCIceServer[]>([{ urls: 'stun:stun.l.google.com:19302' }]);
   const globalFileInputRef = useRef<HTMLInputElement>(null);
+  const globalFolderInputRef = useRef<HTMLInputElement>(null);
 
   const updatePeer = useCallback((id: string, update: Partial<PeerData>) => {
     setPeers(prev => {
@@ -336,6 +337,9 @@ export default function RoomViewer() {
            sender.start();
         }
       });
+      // Clear inputs to allow re-selecting the same file/folder
+      if (globalFileInputRef.current) globalFileInputRef.current.value = "";
+      if (globalFolderInputRef.current) globalFolderInputRef.current.value = "";
     }
   };
 
@@ -386,13 +390,23 @@ export default function RoomViewer() {
           {peerList.length > 1 && (
             <div className="flex justify-start mb-6">
               <input type="file" multiple ref={globalFileInputRef} onChange={handleGlobalSend} className="hidden" />
-              <button 
-                onClick={() => globalFileInputRef.current?.click()}
-                className={`flex items-center gap-2 bg-transparent border ${themeBorder} ${themeText} font-semibold px-5 py-2.5 rounded-xl transition-all duration-300 ${themeHover} shadow-lg`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-                Send to All Devices
-              </button>
+              <input type="file" {...{webkitdirectory: "", directory: ""} as any} multiple ref={globalFolderInputRef} onChange={handleGlobalSend} className="hidden" />
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => globalFileInputRef.current?.click()}
+                  className={`flex items-center gap-2 bg-transparent border ${themeBorder} ${themeText} font-semibold px-5 py-2.5 rounded-xl transition-all duration-300 ${themeHover} shadow-lg`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+                  Send to All
+                </button>
+                <button 
+                  onClick={() => globalFolderInputRef.current?.click()}
+                  className={`flex items-center gap-2 bg-transparent border ${themeBorder} ${themeText} font-semibold px-5 py-2.5 rounded-xl transition-all duration-300 ${themeHover} shadow-lg`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  Send Folder to All
+                </button>
+              </div>
             </div>
           )}
           
