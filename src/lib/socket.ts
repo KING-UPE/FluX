@@ -3,9 +3,23 @@ import { io, Socket } from 'socket.io-client';
 // Production: env var (Render). Local dev: same hostname.
 function getSignalingUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_SIGNALING_URL || '';
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) return envUrl;
-  if (typeof window !== 'undefined') return `http://${window.location.hostname}:3001`;
-  return 'http://localhost:3001';
+  const isEnvLocal = envUrl.includes('localhost') || envUrl.includes('127.0.0.1');
+
+  if (typeof window !== 'undefined') {
+    const isWindowLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // If we're on a LAN IP (mobile/other device), but the env says localhost,
+    // we MUST use the current hostname to find the signaling server.
+    if (!isWindowLocal && isEnvLocal) {
+      return `http://${window.location.hostname}:3001`;
+    }
+    
+    // Fallback: Use env if provided and non-local, otherwise use current hostname
+    if (envUrl && !isEnvLocal) return envUrl;
+    return `http://${window.location.hostname}:3001`;
+  }
+  
+  return envUrl || 'http://localhost:3001';
 }
 
 const SIGNALING_SERVER_URL = getSignalingUrl();

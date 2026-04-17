@@ -21,6 +21,7 @@ interface PeerData {
 export default function RoomViewer() {
   const [mounted, setMounted] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>('waking');
+  const [isSecure, setIsSecure] = useState(true);
   const [peers, setPeers] = useState<Record<string, PeerData>>({});
   
   const rtcMapRef = useRef<Record<string, WebRTCConnection>>({});
@@ -251,6 +252,9 @@ export default function RoomViewer() {
   }, [roomPin]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsSecure(window.isSecureContext);
+    }
     startConnection();
     setMounted(true);
     return () => {
@@ -352,6 +356,21 @@ export default function RoomViewer() {
     </header>
 
     <div className="w-full max-w-6xl mx-auto py-1 px-6">
+      {!isSecure && (
+        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-4">
+          <div className="bg-amber-500/20 p-2 rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div>
+            <h4 className="text-amber-400 font-bold text-sm">Insecure Context Detected</h4>
+            <p className="text-white/60 text-xs leading-relaxed mt-1">
+              WebRTC (P2P) is disabled by your browser on non-HTTPS origins. 
+              <br />
+              <span className="font-semibold text-white/80">Fix:</span> Use <code className="bg-white/10 px-1 rounded">https://</code> or a service like **ngrok** to test on mobile.
+            </p>
+          </div>
+        </div>
+      )}
       
       <div className="flex flex-col lg:flex-row items-stretch justify-start mt-4 gap-8 max-w-[1400px] mx-auto px-4 w-full h-full min-h-[600px]">
         

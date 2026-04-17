@@ -19,15 +19,26 @@ export class WebRTCConnection {
     this.peerId = peerId;
     this.onOpenCallback = onOpen || null;
 
+    const iceServers: RTCIceServer[] = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ];
+
+    const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+    const turnUser = process.env.NEXT_PUBLIC_TURN_USERNAME;
+    const turnPass = process.env.NEXT_PUBLIC_TURN_PASSWORD;
+
+    if (turnUrl) {
+      iceServers.push({
+        urls: turnUrl,
+        username: turnUser,
+        credential: turnPass,
+      });
+    }
+
     this.peerConnection = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' },
-          // ⛔ TURN SERVERS REMOVED ⛔
-      ],
+      iceServers,
       iceCandidatePoolSize: 10,
     });
 
