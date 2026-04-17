@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import DeviceCard from "./DeviceCard";
 import ConnectionLoader from "./ConnectionLoader";
@@ -291,7 +291,7 @@ export default function RoomViewer() {
   }, [peerList.length, isManualRoom, connectionState, mounted]);
 
   // ── Theme computation (must be before early returns to honour Rules of Hooks) ──
-  const computedTheme = React.useMemo((): ThemeColors => {
+  const computedTheme = useMemo((): ThemeColors => {
     const activePeers = Object.values(peers);
     if (connectionState !== 'connected') {
       return { themeText: "text-amber-400", themeBg: "bg-amber-400", themeBorder: "border-amber-400", themeShadow: "shadow-[0_0_10px_#f59e0b]", themeHover: "hover:bg-amber-400 hover:text-black hover:shadow-[0_0_15px_#f59e0b] hover:border-transparent", glowColor: "bg-amber-400/20", accent: "#f59e0b" };
