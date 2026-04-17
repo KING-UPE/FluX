@@ -14,7 +14,8 @@
     "qrcode.react": "^4.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",

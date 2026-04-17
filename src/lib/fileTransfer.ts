@@ -1,4 +1,5 @@
 import { WebRTCConnection, ChunkData } from './webrtc';
+import JSZip from 'jszip';
 
 const CHUNK_SIZE = 16 * 1024; // safely 16KB maximum for iOS Safari SCTP limits
 const MAX_BUFFERED = 1 * 1024 * 1024; // 1MB conservative backpressure limit
@@ -211,6 +212,7 @@ export class FileReceiver {
   private startTime = 0;
 
   // Fallback for mobile / no filesystem API
+  private zipInstance: JSZip | null = null;
   private fallbackBuffers: ArrayBuffer[] = [];
   private fallbackMimes: Record<string, string> = {};
   private fallbackName = '';
@@ -274,14 +276,33 @@ export class FileReceiver {
         if (this.currentWriter) {
           await this.currentWriter.close();
           this.currentWriter = null;
+        } else if (this.zipInstance) {
+           // Add the reassembled file to the ZIP
+           const blob = new Blob(this.fallbackBuffers, { type: this.fallbackMimes[this.fallbackName] || 'application/octet-stream' });
+           this.zipInstance.file(this.fallbackName, blob);
+           this.fallbackBuffers = [];
         } else if (this.outDirHandle) {
-           // Should have writer if dir handle is present, but maybe it failed.
+           // Handle case where handle exists but writer failed
+           console.warn('File done but no writer active for native FS');
         } else {
-           // Mobile fallback multi-download
+           // Single file fallback multi-download
            this.triggerMobileDownload();
         }
       }
       else if (msg.type === 'all_done') {
+        if (this.zipInstance) {
+          const zipContent = await this.zipInstance.generateAsync({ type: 'blob' });
+          const url = URL.createObjectURL(zipContent);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `flux-transfer-${Date.now()}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+          this.zipInstance = null;
+        }
+
         // Wait for the disk queue to be completely empty before confirming
         this.queue.then(() => {
           this.rtc.send(JSON.stringify({ type: 'transfer_complete_ack' }));
@@ -326,6 +347,9 @@ export class FileReceiver {
         this.rtc.send(JSON.stringify({ type: 'cancel' }));
         return;
       }
+    } else if (this.reqInfo.totalFiles > 1) {
+      // ZIP Fallback for non-supported browsers
+      this.zipInstance = new JSZip();
     }
 
     this.rtc.send(JSON.stringify({ type: 'ready' }));
