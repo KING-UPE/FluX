@@ -34,6 +34,13 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<ThemeColors>(defaultTheme);
+
+  React.useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--theme-accent", theme.accent);
+    }
+  }, [theme]);
+
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
       {children}

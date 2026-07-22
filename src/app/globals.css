@@ -102,3 +102,35 @@ body {
   border: 1px solid var(--color-glass-border);
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
 }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+  border-left: 1px solid var(--color-glass-border);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--theme-accent, var(--color-neon-blue));
+  border-radius: 5px;
+  border: 2px solid var(--color-background); /* adds space around thumb */
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-accent, var(--color-neon-blue));
+  /* Brighten on hover - unfortunately css filters don't work on scrollbars in all browsers, so we rely on the vibrant accent color */
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--color-background);
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-accent, var(--color-neon-blue)) var(--color-background);
+}
