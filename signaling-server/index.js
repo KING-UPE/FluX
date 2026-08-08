@@ -40,6 +40,26 @@ function getAliasForRoom(lanID) {
   return roomAliases[lanID];
 }
 
+// Reclaim PINs from empty rooms — without this both maps grow forever and the
+// 90k-PIN space eventually fills up on a long-running instance.
+async function releaseRoomIfEmpty(lanID) {
+  if (!lanID || !roomAliases[lanID]) return;
+  const remaining = await io.in(lanID).fetchSockets();
+  if (remaining.length > 0) return;
+  const pin = roomAliases[lanID];
+  delete roomAliases[lanID];
+  delete pinToRoom[pin];
+  console.log(`  Released room ${lanID} [PIN: ${pin}]`);
+}
+
+function describePeer(id) {
+  return {
+    id,
+    name: userInfo[id]?.name || 'Unknown',
+    deviceType: userInfo[id]?.deviceType || 'device',
+  };
+}
+
 io.on('connection', (socket) => {
   console.log(`+ ${socket.id}`);
 
@@ -81,11 +101,7 @@ io.on('connection', (socket) => {
     const sockets = await io.in(lanID).fetchSockets();
     const peers = sockets
       .filter(s => s.id !== socket.id)
-      .map(s => ({
-        id: s.id,
-        name: userInfo[s.id]?.name || 'Unknown',
-        deviceType: userInfo[s.id]?.deviceType || 'device',
-      }));
+      .map(s => describePeer(s.id));
 
     socket.emit('existing_users', peers);
     socket.to(lanID).emit('user_joined', {
@@ -93,6 +109,17 @@ io.on('connection', (socket) => {
       name: deviceName,
       deviceType,
     });
+  });
+
+  // Manual re-scan: resend the peer list and re-announce this device, so a
+  // device that was missed (or whose P2P link died) can be picked up again.
+  socket.on('rescan', async () => {
+    const lanID = userRooms[socket.id];
+    if (!lanID) return;
+
+    const sockets = await io.in(lanID).fetchSockets();
+    socket.emit('existing_users', sockets.filter(s => s.id !== socket.id).map(s => describePeer(s.id)));
+    socket.to(lanID).emit('user_joined', describePeer(socket.id));
   });
 
   // ── WebRTC Signaling Relay (tiny data only) ──────────────
@@ -108,17 +135,28 @@ io.on('connection', (socket) => {
     io.to(to).emit('ice_candidate', { candidate, sender: socket.id });
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     const info = userInfo[socket.id];
     console.log(`- ${info?.name || socket.id}`);
     const room = userRooms[socket.id];
+    delete userRooms[socket.id];
+    delete userInfo[socket.id];
     if (room) {
       socket.to(room).emit('user_left', socket.id);
-      delete userRooms[socket.id];
-      delete userInfo[socket.id];
+      await releaseRoomIfEmpty(room);
     }
   });
 });
 
-const PORT = process.env.PORT || 3001;
+// `--port` wins so local dev can pin 3001 cross-platform (npm scripts cannot
+// set env vars portably, and PORT is often already taken by the Next dev server).
+// SIGNALING_PORT then PORT keep hosted deployments such as Render working.
+function resolvePort() {
+  const flagIndex = process.argv.indexOf('--port');
+  const fromFlag = flagIndex !== -1 ? Number(process.argv[flagIndex + 1]) : NaN;
+  if (Number.isInteger(fromFlag) && fromFlag > 0) return fromFlag;
+  return process.env.SIGNALING_PORT || process.env.PORT || 3001;
+}
+
+const PORT = resolvePort();
 server.listen(PORT, () => console.log(`FLUX Signaling Server on port ${PORT}`));

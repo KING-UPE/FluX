@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:all": "concurrently \"npm run dev\" \"cd signaling-server && node index.js\"",
+    "dev:all": "concurrently \"npm run dev\" \"cd signaling-server && node index.js --port 3001\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

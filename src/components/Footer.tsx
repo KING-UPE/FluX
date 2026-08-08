@@ -53,7 +53,7 @@ const socialLinks = [
 
 const Footer = () => {
   const { theme } = useAppTheme();
-  const { themeText, themeBorder, themeShadow, accent } = theme;
+  const { themeText, accent } = theme;
 
   return (
     <footer className="w-full py-8 mt-auto border-t border-white/5 bg-black/20 backdrop-blur-sm">

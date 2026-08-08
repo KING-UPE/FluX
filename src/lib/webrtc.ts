@@ -2,6 +2,13 @@ import { socketService } from './socket';
 
 export type ChunkData = ArrayBuffer | string;
 
+/**
+ * Resume sending once the outgoing buffer has drained to this level.
+ * Must stay well below the sender's high-water mark, otherwise
+ * `bufferedamountlow` never fires and transfers stall.
+ */
+export const DC_LOW_WATER = 256 * 1024;
+
 // ── Cached ICE servers (fetched once, reused for all connections) ──
 let cachedIceServers: RTCIceServer[] | null = null;
 
@@ -51,7 +58,9 @@ export class WebRTCConnection {
   private iceCandidateQueue: RTCIceCandidateInit[] = [];
   private messageQueue: ChunkData[] = [];
   private onDataCallbacks: ((data: ChunkData) => void)[] = [];
+  private onCloseCallbacks: (() => void)[] = [];
   private onOpenCallback: (() => void) | null;
+  private closed = false;
 
   constructor(peerId: string, isInitiator: boolean, iceServers: RTCIceServer[], onOpen?: () => void) {
     this.peerId = peerId;
@@ -62,10 +71,14 @@ export class WebRTCConnection {
       iceCandidatePoolSize: 10,
     });
 
-    this.peerConnection.onconnectionstatechange = () => {
+    // addEventListener (not onconnectionstatechange) so callers can attach their
+    // own handler without silently detaching this one.
+    this.peerConnection.addEventListener('connectionstatechange', () => {
       const state = this.peerConnection.connectionState;
       console.log(`[P2P ${this.peerId.slice(0,6)}] Connection State: ${state}`);
-    };
+      // 'disconnected' is often transient and recovers, so it is not fatal here.
+      if (state === 'failed' || state === 'closed') this.notifyClosed();
+    });
 
     this.peerConnection.oniceconnectionstatechange = () => {
       const state = this.peerConnection.iceConnectionState;
@@ -76,7 +89,7 @@ export class WebRTCConnection {
       console.log(`[SIG ${this.peerId.slice(0,6)}] Signaling: ${this.peerConnection.signalingState}`);
     };
 
-    (this.peerConnection as any).onicecandidateerror = (e: any) => {
+    this.peerConnection.onicecandidateerror = (e: RTCPeerConnectionIceErrorEvent) => {
       // Error 701 = STUN host lookup received error (often just no internet).
       // We silence this to keep logs clean for LAN-only mode.
       if (e.errorCode === 701) {
@@ -90,7 +103,7 @@ export class WebRTCConnection {
       this.dataChannel = this.peerConnection.createDataChannel('flux', {
         ordered: true,
       });
-      this.dataChannel.bufferedAmountLowThreshold = 1024 * 1024;
+      this.dataChannel.bufferedAmountLowThreshold = DC_LOW_WATER;
       this.setupDataChannel(this.dataChannel);
 
       this.peerConnection.createOffer().then(offer => {
@@ -104,7 +117,7 @@ export class WebRTCConnection {
     } else {
       this.peerConnection.ondatachannel = (e) => {
         this.dataChannel = e.channel;
-        this.dataChannel.bufferedAmountLowThreshold = 1024 * 1024;
+        this.dataChannel.bufferedAmountLowThreshold = DC_LOW_WATER;
         this.setupDataChannel(this.dataChannel);
       };
     }
@@ -129,10 +142,27 @@ export class WebRTCConnection {
     };
 
     ch.onmessage = (e) => {
-      this.onDataCallbacks.forEach(cb => cb(e.data));
+      // A throwing listener must not stop the others from seeing the chunk.
+      this.onDataCallbacks.slice().forEach(cb => {
+        try { cb(e.data); } catch (err) { console.error('DataChannel listener error:', err); }
+      });
     };
 
-    ch.onclose = () => console.log(`DataChannel closed: ${this.peerId.slice(0,6)}`);
+    ch.onclose = () => {
+      console.log(`DataChannel closed: ${this.peerId.slice(0,6)}`);
+      this.notifyClosed();
+    };
+
+    ch.onerror = (e) => {
+      // A local close() also fires onerror with an abort — that is not a fault.
+      const err = (e as RTCErrorEvent).error;
+      if (err?.name === 'OperationError' || ch.readyState === 'closing' || ch.readyState === 'closed') {
+        console.log(`DataChannel with ${this.peerId.slice(0,6)} shut down: ${err?.message ?? 'closed'}`);
+      } else {
+        console.error(`DataChannel error with ${this.peerId.slice(0,6)}:`, e);
+      }
+      this.notifyClosed();
+    };
   }
 
   public onData(cb: (data: ChunkData) => void) {
@@ -141,6 +171,27 @@ export class WebRTCConnection {
 
   public offData(cb: (data: ChunkData) => void) {
     this.onDataCallbacks = this.onDataCallbacks.filter(c => c !== cb);
+  }
+
+  /** Fires once when this connection can no longer carry data, so in-flight
+   *  transfers can fail loudly instead of hanging at a frozen percentage. */
+  public onClose(cb: () => void) {
+    if (this.closed) { cb(); return; }
+    this.onCloseCallbacks.push(cb);
+  }
+
+  public offClose(cb: () => void) {
+    this.onCloseCallbacks = this.onCloseCallbacks.filter(c => c !== cb);
+  }
+
+  private notifyClosed() {
+    if (this.closed) return;
+    this.closed = true;
+    const callbacks = this.onCloseCallbacks.slice();
+    this.onCloseCallbacks = [];
+    callbacks.forEach(cb => {
+      try { cb(); } catch (err) { console.error('Close listener error:', err); }
+    });
   }
 
   public async handleOffer(offer: RTCSessionDescriptionInit) {
@@ -178,11 +229,17 @@ export class WebRTCConnection {
     }
   }
 
+  /** send() is overloaded per payload type, so the union needs narrowing. */
+  private rawSend(channel: RTCDataChannel, data: ChunkData) {
+    if (typeof data === 'string') channel.send(data);
+    else channel.send(data);
+  }
+
   private flushMessageQueue() {
     while (this.messageQueue.length > 0 && this.dataChannel?.readyState === 'open') {
       try {
         const msg = this.messageQueue.shift()!;
-        this.dataChannel.send(msg as any); 
+        this.rawSend(this.dataChannel, msg);
       } catch (e) {
         console.error('Failed to send queued message:', e);
       }
@@ -192,7 +249,7 @@ export class WebRTCConnection {
   public send(data: ChunkData) {
     if (this.dataChannel?.readyState === 'open') {
       try {
-        this.dataChannel.send(data as any);
+        this.rawSend(this.dataChannel, data);
       } catch (e) {
         console.error('DataChannel send error:', e);
       }
@@ -207,7 +264,8 @@ export class WebRTCConnection {
 
   public close(reason = 'Manual') {
     console.log(`[P2P ${this.peerId.slice(0,6)}] Finalizing Connection (Reason: ${reason})`);
-    this.dataChannel?.close();
-    this.peerConnection.close();
+    this.notifyClosed();
+    try { this.dataChannel?.close(); } catch {}
+    try { this.peerConnection.close(); } catch {}
   }
 }

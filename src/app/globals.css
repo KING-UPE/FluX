@@ -79,6 +79,48 @@
   animation: cold-start-progress 60s ease-out forwards;
 }
 
+/* Panels that appear mid-card (incoming request, ready-to-save list).
+   The markup previously used tailwindcss-animate classes, which this project
+   does not install, so those entries never animated. */
+@keyframes flux-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.flux-pop {
+  animation: flux-pop 0.25s ease-out both;
+}
+
+/* Progress bar with no known percentage yet (waiting on the peer to accept). */
+@keyframes flux-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+.animate-flux-indeterminate {
+  animation: flux-indeterminate 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .flux-pop,
+  .animate-flux-indeterminate {
+    animation: none;
+  }
+}
+
 html {
   height: 100%;
   overflow: hidden;

@@ -1,16 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import RoomViewer from "@/components/RoomViewer";
-import { getOrCreateDeviceName } from "@/lib/socket";
 
 export default function Home() {
-  const [deviceName, setDeviceName] = useState("Connecting...");
-
-  useEffect(() => {
-    setDeviceName(getOrCreateDeviceName());
-  }, []);
-
   return (
     <main className="relative w-full flex-1 bg-background flex flex-col">
       {/* Main Grid Interface */}

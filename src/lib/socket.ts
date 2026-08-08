@@ -60,11 +60,26 @@ function getDeviceType(): string {
 
 export interface PeerInfo { id: string; name: string; deviceType: string; }
 export type ConnectionState = 'waking' | 'connecting' | 'connected' | 'failed';
+/** Health of the signaling link *after* the room is up. */
+export type SignalState = 'online' | 'reconnecting' | 'offline';
+
+export interface ConnectOptions {
+  onUserJoined: (peer: PeerInfo) => void;
+  onExistingUsers: (peers: PeerInfo[]) => void;
+  onUserLeft: (id: string) => void;
+  onStateChange: (state: ConnectionState) => void;
+  onSignalChange: (state: SignalState) => void;
+  onRoomInfo: (pin: string) => void;
+  /** Signaling came back after a drop — every peer id is stale, start over. */
+  onReconnected: () => void;
+  roomCode?: string | null;
+}
 
 class SocketService {
   public socket: Socket | null = null;
   public roomCode: string = "local-lan-room";
   public myDeviceInfo: { name: string; type: string } | null = null;
+  private hasConnected = false;
 
   async wakeServer(onStateChange: (state: ConnectionState) => void): Promise<boolean> {
     // Fast path: local dev
@@ -92,22 +107,23 @@ class SocketService {
     return false;
   }
 
-  connect(
-    onUserJoined: (peer: PeerInfo) => void,
-    onExistingUsers: (peers: PeerInfo[]) => void,
-    onUserLeft: (id: string) => void,
-    onStateChange: (state: ConnectionState) => void,
-    onRoomInfo: (pin: string) => void,
-    manualRoomCode?: string | null
-  ) {
+  connect(options: ConnectOptions) {
+    const {
+      onUserJoined, onExistingUsers, onUserLeft,
+      onStateChange, onSignalChange, onRoomInfo, onReconnected,
+      roomCode,
+    } = options;
+
     this.myDeviceInfo = {
       name: getOrCreateDeviceName(),
       type: getDeviceType()
     };
 
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
     }
+    this.hasConnected = false;
 
     this.socket = io(SIGNALING_SERVER_URL, {
       transports: ['websocket'],
@@ -120,13 +136,27 @@ class SocketService {
     this.socket.on('connect', () => {
       console.log('Connected:', this.socket?.id);
       onStateChange('connected');
+      onSignalChange('online');
+
+      // A reconnect hands us a brand new socket id, so every peer's view of us
+      // (and our WebRTC sessions with them) is dead. Tell the UI to rebuild.
+      if (this.hasConnected) onReconnected();
+      this.hasConnected = true;
+
       this.socket?.emit('join_room', {
         deviceName: this.myDeviceInfo?.name,
         deviceType: this.myDeviceInfo?.type,
-        roomCode: manualRoomCode || undefined
+        roomCode: roomCode || undefined
       });
     });
 
+    this.socket.on('disconnect', (reason: string) => {
+      console.log('Signaling disconnected:', reason);
+      // An explicit client-side disconnect is expected; anything else is a drop.
+      if (reason !== 'io client disconnect') onSignalChange('reconnecting');
+    });
+
+    this.socket.io.on('reconnect_failed', () => onSignalChange('offline'));
     this.socket.on('connect_error', () => console.log('Server not reachable...'));
     this.socket.on('existing_users', (peers: PeerInfo[]) => onExistingUsers(peers));
     this.socket.on('user_joined', (peer: PeerInfo) => onUserJoined(peer));
@@ -134,9 +164,18 @@ class SocketService {
     this.socket.on('room_info', (data: { pin: string }) => onRoomInfo(data.pin));
   }
 
+  /** Ask the server to re-announce us and resend the peer list. */
+  rescan() {
+    this.socket?.emit('rescan');
+  }
+
   disconnect() {
-    this.socket?.disconnect();
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+    }
     this.socket = null;
+    this.hasConnected = false;
   }
 }
 

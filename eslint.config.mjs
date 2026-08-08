@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone CommonJS Node service with its own package.json — the
+    // Next/TypeScript rules here do not apply to it.
+    "signaling-server/**",
   ]),
 ]);
 
